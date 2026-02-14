@@ -947,6 +947,7 @@
             <div class="nav-tab" onclick="showSection('lineup')">LINEUP BUILDER</div>
             <div class="nav-tab" onclick="showSection('pitching')">IN-GAME STATS</div>
             <div class="nav-tab" onclick="showSection('stats')">SEASON STATS</div>
+            <div class="nav-tab" onclick="showSection('data')">💾 BACKUP</div>
         </div>
         
         <!-- ROSTER Section -->
@@ -1114,6 +1115,95 @@
             </div>
         </div>
         
+        
+        <!-- DATA MANAGEMENT Section -->
+        <div id="data" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">💾 DATA BACKUP & RESTORE</h2>
+                </div>
+                
+                <div style="max-width: 700px; margin: 0 auto;">
+                    <!-- Export Section -->
+                    <div style="margin-bottom: 32px; padding: 24px; background: rgba(26, 95, 63, 0.1); border: 2px solid var(--diamond-green); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--diamond-green);">
+                            📤 EXPORT DATA (Backup)
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            Download all your roster, games, and stats as a backup file. Save this file to:
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-bottom: 20px; padding-left: 24px;">
+                            <li>Your computer (Documents folder)</li>
+                            <li>Google Drive or Dropbox</li>
+                            <li>Email it to yourself</li>
+                            <li>USB drive for safe keeping</li>
+                        </ul>
+                        <button class="btn" onclick="exportAllData()" style="width: 100%; padding: 16px; font-size: 1.1rem;">
+                            📥 DOWNLOAD BACKUP FILE
+                        </button>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 12px; text-align: center;">
+                            💡 Recommended: Export after every game
+                        </p>
+                    </div>
+                    
+                    <!-- Import Section -->
+                    <div style="margin-bottom: 32px; padding: 24px; background: rgba(59, 130, 246, 0.1); border: 2px solid var(--safe-blue); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--safe-blue);">
+                            📥 IMPORT DATA (Restore)
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            Restore data from a backup file. This will:
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-bottom: 20px; padding-left: 24px;">
+                            <li>Replace ALL current data</li>
+                            <li>Restore roster, games, and stats</li>
+                            <li>Cannot be undone</li>
+                        </ul>
+                        <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="handleImportFile(this.files[0])">
+                        <button class="btn btn-secondary" onclick="document.getElementById('importFileInput').click()" style="width: 100%; padding: 16px; font-size: 1.1rem;">
+                            📤 CHOOSE BACKUP FILE TO RESTORE
+                        </button>
+                        <p style="color: var(--warning-yellow); font-size: 0.85rem; margin-top: 12px; text-align: center;">
+                            ⚠️ Warning: This will replace all your current data!
+                        </p>
+                    </div>
+                    
+                    <!-- Clear Data Section -->
+                    <div style="padding: 24px; background: rgba(220, 38, 38, 0.1); border: 2px solid var(--alert-red); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--alert-red);">
+                            🗑️ CLEAR ALL DATA
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            Start fresh with a new season. This will permanently delete:
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-bottom: 20px; padding-left: 24px;">
+                            <li>All games and stats</li>
+                            <li>All roster data</li>
+                            <li>All season history</li>
+                        </ul>
+                        <button class="btn btn-danger" onclick="clearAllData()" style="width: 100%; padding: 16px; font-size: 1.1rem;">
+                            🗑️ DELETE EVERYTHING (Cannot Undo!)
+                        </button>
+                        <p style="color: var(--alert-red); font-size: 0.85rem; margin-top: 12px; text-align: center; font-weight: 600;">
+                            ⚠️ DANGER: This cannot be undone! Export first!
+                        </p>
+                    </div>
+                    
+                    <!-- Info Section -->
+                    <div style="margin-top: 32px; padding: 16px; background: rgba(255, 255, 255, 0.02); border-radius: 8px;">
+                        <h4 style="color: var(--text-primary); margin-bottom: 12px;">📚 How This Works</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6;">
+                            Your data is stored on <strong>this device only</strong>. It doesn't automatically sync to other devices or the cloud. 
+                            That's why backups are important! Export regularly and save your backup file somewhere safe.
+                        </p>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-top: 12px;">
+                            <strong>To transfer to another device:</strong> Export on Device A → Email/Drive/USB → Import on Device B
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- SEASON STATS Section -->
         <div id="stats" class="section">
             <div class="card">
@@ -1220,12 +1310,14 @@
         }
         
         // Initialize pitching log for each player
+        let needsSave = false;
         roster.forEach(player => {
             if (!seasonData.pitchingLog[player.id]) {
                 seasonData.pitchingLog[player.id] = {
                     totalPitches: 0,
                     games: []
                 };
+                needsSave = true;
             }
             if (!seasonData.playingTime[player.id]) {
                 seasonData.playingTime[player.id] = {
@@ -1235,20 +1327,30 @@
                 positions.forEach(pos => {
                     seasonData.playingTime[player.id].positions[pos] = 0;
                 });
+                needsSave = true;
             }
             if (!seasonData.benchTime[player.id]) {
                 seasonData.benchTime[player.id] = 0;
+                needsSave = true;
             }
             if (!seasonData.positionTiers[player.id]) {
                 seasonData.positionTiers[player.id] = {
                     premium: 0,
                     tier2: 0
                 };
+                needsSave = true;
             }
             if (!seasonData.pitcherRotation[player.id]) {
                 seasonData.pitcherRotation[player.id] = 0; // Count of games pitched
+                needsSave = true;
             }
         });
+        
+        // Save if we initialized any new player data
+        if (needsSave) {
+            localStorage.setItem('cannonBallersData', JSON.stringify(seasonData));
+            console.log('SeasonData initialized and saved for', roster.length, 'players');
+        }
         
         // Navigation
         function showSection(sectionId) {
@@ -3970,6 +4072,20 @@
                         if (pos === 'P') {
                             // Can only pitch once per game
                             if (gamePitcherTracking[p.id].hasPitched) return false;
+                            
+                            // NEW: Check pitcher rest requirements
+                            const pitchLog = seasonData.pitchingLog[p.id];
+                            if (pitchLog && pitchLog.games.length > 0) {
+                                const lastGame = pitchLog.games[pitchLog.games.length - 1];
+                                const today = currentGame.date;
+                                const restStatus = getRestStatus(lastGame, today);
+                                
+                                // Don't assign if pitcher needs rest
+                                if (restStatus.class === 'needs-rest') {
+                                    console.log(`Skipping ${p.name} for pitcher - needs rest (${lastGame.pitches} pitches on ${lastGame.date})`);
+                                    return false;
+                                }
+                            }
                         }
                         
                         if (pos === 'C') {
@@ -4844,6 +4960,134 @@
         }
         
         // Save Data
+        // Export/Import/Clear Data Functions
+        function exportAllData() {
+            try {
+                // Gather all data
+                const exportData = {
+                    version: '1.0',
+                    appName: 'Baseball Manager',
+                    exportDate: new Date().toISOString(),
+                    teamName: 'Cannon Ballers', // Could be customized in future
+                    roster: localStorage.getItem('cannonBallersRoster'),
+                    seasonData: localStorage.getItem('cannonBallersData')
+                };
+                
+                // Create downloadable file
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // Create download link
+                const a = document.createElement('a');
+                a.href = url;
+                const dateStr = new Date().toISOString().split('T')[0];
+                a.download = `cannon-ballers-backup-${dateStr}.json`;
+                
+                // Trigger download
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                alert('✅ Backup file downloaded!\n\nSave this file somewhere safe:\n• Google Drive\n• Email to yourself\n• USB drive\n• Computer Documents folder');
+                console.log('Data exported successfully');
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('❌ Error creating backup: ' + error.message);
+            }
+        }
+        
+        function handleImportFile(file) {
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importData = JSON.parse(e.target.result);
+                    
+                    // Validate data structure
+                    if (!importData.roster || !importData.seasonData) {
+                        alert('❌ Invalid backup file! This doesn\'t look like a valid backup.');
+                        return;
+                    }
+                    
+                    // Confirm before importing
+                    const teamName = importData.teamName || 'Unknown Team';
+                    const exportDate = importData.exportDate ? new Date(importData.exportDate).toLocaleDateString() : 'Unknown Date';
+                    
+                    const confirmed = confirm(
+                        `📥 IMPORT DATA\n\n` +
+                        `Team: ${teamName}\n` +
+                        `Backup Date: ${exportDate}\n\n` +
+                        `⚠️ WARNING: This will REPLACE all your current data!\n\n` +
+                        `Are you sure you want to continue?`
+                    );
+                    
+                    if (!confirmed) {
+                        console.log('Import cancelled by user');
+                        return;
+                    }
+                    
+                    // Import data
+                    localStorage.setItem('cannonBallersRoster', importData.roster);
+                    localStorage.setItem('cannonBallersData', importData.seasonData);
+                    
+                    alert('✅ Data imported successfully!\n\nReloading page to apply changes...');
+                    
+                    // Reload page to load new data
+                    location.reload();
+                } catch (error) {
+                    console.error('Import error:', error);
+                    alert('❌ Error importing backup: ' + error.message + '\n\nMake sure you selected a valid backup file.');
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function clearAllData() {
+            const confirmed = confirm(
+                '🗑️ DELETE ALL DATA\n\n' +
+                '⚠️ WARNING: This will permanently delete:\n' +
+                '• All games and stats\n' +
+                '• All roster data\n' +
+                '• All season history\n\n' +
+                'This CANNOT be undone!\n\n' +
+                'Are you ABSOLUTELY SURE?'
+            );
+            
+            if (!confirmed) return;
+            
+            // Double confirmation
+            const doubleConfirm = confirm(
+                '🚨 FINAL WARNING 🚨\n\n' +
+                'Did you export a backup first?\n\n' +
+                'Click OK to DELETE EVERYTHING\n' +
+                'Click Cancel to go back'
+            );
+            
+            if (!doubleConfirm) {
+                alert('✅ Cancelled - Your data is safe!');
+                return;
+            }
+            
+            try {
+                // Clear all localStorage
+                localStorage.removeItem('cannonBallersRoster');
+                localStorage.removeItem('cannonBallersData');
+                localStorage.removeItem('setupComplete');
+                
+                alert('✅ All data deleted.\n\nReloading page...');
+                
+                // Reload page
+                location.reload();
+            } catch (error) {
+                console.error('Clear data error:', error);
+                alert('❌ Error clearing data: ' + error.message);
+            }
+        }
+        
         function saveData() {
             localStorage.setItem('cannonBallersData', JSON.stringify(seasonData));
         }
