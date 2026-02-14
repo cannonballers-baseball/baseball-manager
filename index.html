@@ -1224,8 +1224,8 @@
     </div>
 
     <script>
-        // Team Roster
-        const roster = [
+        // Team Roster - Load from localStorage or use defaults
+        let roster = JSON.parse(localStorage.getItem('cannonBallersRoster')) || [
             { id: 1, name: "Avery Ahlquist", number: null, cannotPlay: [], atBats: 0, hits: 0, walks: 0 },
             { id: 2, name: "Carter Shipley", number: null, cannotPlay: [], atBats: 0, hits: 0, walks: 0 },
             { id: 3, name: "Donovan Cecil", number: null, cannotPlay: [], atBats: 0, hits: 0, walks: 0 },
@@ -1239,6 +1239,12 @@
             { id: 11, name: "William Ahlquist", number: null, cannotPlay: [], atBats: 0, hits: 0, walks: 0 },
             { id: 12, name: "Zeke Seele-Wiegand", number: null, cannotPlay: [], atBats: 0, hits: 0, walks: 0 }
         ];
+        
+        // Save roster to localStorage if it doesn't exist
+        if (!localStorage.getItem('cannonBallersRoster')) {
+            localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            console.log('Initial roster saved to localStorage');
+        }
         
         const positions = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"];
         const innings = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
@@ -4908,15 +4914,38 @@
         
         // Season Stats
         function renderSeasonStats() {
+            console.log('=== renderSeasonStats called ===');
+            
             // Reload data from localStorage to ensure we have latest stats
             roster = JSON.parse(localStorage.getItem('cannonBallersRoster')) || [];
-            seasonData = JSON.parse(localStorage.getItem('cannonBallersData')) || seasonData;
+            seasonData = JSON.parse(localStorage.getItem('cannonBallersData')) || {
+                games: [],
+                pitchingLog: {},
+                playingTime: {},
+                benchTime: {},
+                positionTiers: {},
+                pitcherRotation: {},
+                currentGameId: null
+            };
+            
+            console.log('Roster loaded:', roster.length, 'players');
+            console.log('SeasonData loaded:', {
+                games: seasonData.games.length,
+                pitchingLog: Object.keys(seasonData.pitchingLog).length,
+                playingTime: Object.keys(seasonData.playingTime).length
+            });
             
             const statsGrid = document.getElementById('seasonStats');
+            if (!statsGrid) {
+                console.error('ERROR: seasonStats element not found!');
+                return;
+            }
             
             const totalGames = seasonData.games.length;
-            const totalPitches = Object.values(seasonData.pitchingLog).reduce((sum, p) => sum + p.totalPitches, 0);
+            const totalPitches = Object.values(seasonData.pitchingLog || {}).reduce((sum, p) => sum + (p.totalPitches || 0), 0);
             const avgPitchesPerGame = totalGames > 0 ? (totalPitches / totalGames).toFixed(1) : 0;
+            
+            console.log('Stats calculated:', { totalGames, totalPitches, avgPitchesPerGame });
             
             statsGrid.innerHTML = `
                 <div class="stat-card">
@@ -4937,26 +4966,57 @@
                 </div>
             `;
             
+            console.log('Stats grid updated');
+            
             // Playing time breakdown
             const breakdown = document.getElementById('playingTimeBreakdown');
+            if (!breakdown) {
+                console.error('ERROR: playingTimeBreakdown element not found!');
+                return;
+            }
+            
+            // Ensure all players have playingTime data
+            roster.forEach(player => {
+                if (!seasonData.playingTime[player.id]) {
+                    console.warn(`Player ${player.name} (${player.id}) missing playingTime data - initializing`);
+                    seasonData.playingTime[player.id] = {
+                        totalInnings: 0,
+                        positions: {}
+                    };
+                    positions.forEach(pos => {
+                        seasonData.playingTime[player.id].positions[pos] = 0;
+                    });
+                }
+            });
+            
             breakdown.innerHTML = `
                 <div class="roster-grid">
                     ${roster.map(player => {
                         const stats = seasonData.playingTime[player.id];
+                        if (!stats) {
+                            console.error(`No stats for player ${player.name} (${player.id})`);
+                            return '';
+                        }
+                        
+                        const positionEntries = Object.entries(stats.positions || {})
+                            .filter(([pos, count]) => count > 0);
+                        
                         return `
                             <div class="player-card">
                                 <div class="player-name">${player.name}</div>
                                 <div class="player-stats">
-                                    ${Object.entries(stats.positions)
-                                        .filter(([pos, count]) => count > 0)
-                                        .map(([pos, count]) => `<div class="stat-badge">${pos}: ${count}</div>`)
-                                        .join('')}
+                                    ${positionEntries.length > 0 
+                                        ? positionEntries.map(([pos, count]) => `<div class="stat-badge">${pos}: ${count}</div>`).join('')
+                                        : '<div style="color: var(--text-secondary); font-size: 0.85rem;">No games played</div>'}
                                 </div>
                             </div>
                         `;
                     }).join('')}
                 </div>
             `;
+            
+            console.log('Playing time breakdown updated');
+            console.log('=== renderSeasonStats complete ===');
         }
         
         // Save Data
