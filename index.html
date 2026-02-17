@@ -947,7 +947,7 @@
             <div class="nav-tab" onclick="showSection('lineup')">LINEUP BUILDER</div>
             <div class="nav-tab" onclick="showSection('pitching')">IN-GAME STATS</div>
             <div class="nav-tab" onclick="showSection('stats')">SEASON STATS</div>
-            <div class="nav-tab" onclick="showSection('data')">💾 BACKUP</div>
+            <div class="nav-tab" onclick="showSection('data')">⚙️ SETTINGS</div>
         </div>
         
         <!-- ROSTER Section -->
@@ -985,15 +985,6 @@
                         <div class="info-label">Opponent</div>
                         <select id="newGameOpponent">
                             <option value="">Select Team</option>
-                            <option value="Pirates">Pirates</option>
-                            <option value="Dodgers">Dodgers</option>
-                            <option value="River Bandits">River Bandits</option>
-                            <option value="Twins">Twins</option>
-                            <option value="Trash Pandas">Trash Pandas</option>
-                            <option value="Blue Jays">Blue Jays</option>
-                            <option value="A's">A's</option>
-                            <option value="Yankees">Yankees</option>
-                            <option value="Rangers">Rangers</option>
                         </select>
                     </div>
                     <div class="info-item">
@@ -1120,10 +1111,40 @@
         <div id="data" class="section">
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">💾 DATA BACKUP & RESTORE</h2>
+                    <h2 class="card-title">⚙️ SETTINGS</h2>
                 </div>
                 
                 <div style="max-width: 700px; margin: 0 auto;">
+                
+                    <!-- Opponent Management Section -->
+                    <div style="margin-bottom: 32px; padding: 24px; background: rgba(251, 191, 36, 0.1); border: 2px solid var(--warning-yellow); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--warning-yellow);">
+                            ⚾ MANAGE OPPONENTS
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.9rem;">
+                            Add, rename, or remove opponents from the dropdown when creating games.
+                        </p>
+                        
+                        <!-- Add New Opponent -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+                            <input type="text" id="newOpponentInput" placeholder="Enter team name..." 
+                                   style="flex: 1; padding: 10px 14px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.95rem;"
+                                   onkeydown="if(event.key==='Enter') addOpponent()">
+                            <button class="btn" onclick="addOpponent()" style="padding: 10px 20px; white-space: nowrap;">
+                                ➕ Add
+                            </button>
+                        </div>
+                        
+                        <!-- Opponent List -->
+                        <div id="opponentList" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Rendered by renderOpponentList() -->
+                        </div>
+                        
+                        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 16px;">
+                            💡 Changes apply immediately to the Create Game dropdown.
+                        </p>
+                    </div>
+                    
                     <!-- Export Section -->
                     <div style="margin-bottom: 32px; padding: 24px; background: rgba(26, 95, 63, 0.1); border: 2px solid var(--diamond-green); border-radius: 12px;">
                         <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--diamond-green);">
@@ -1187,6 +1208,29 @@
                         <p style="color: var(--alert-red); font-size: 0.85rem; margin-top: 12px; text-align: center; font-weight: 600;">
                             ⚠️ DANGER: This cannot be undone! Export first!
                         </p>
+                    </div>
+                    
+                    <!-- Calendar Import Section -->
+                    <div style="margin-bottom: 32px; padding: 24px; background: rgba(59, 130, 246, 0.07); border: 2px solid var(--safe-blue); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--safe-blue);">
+                            📅 IMPORT SCHEDULE FROM CALENDAR
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 8px; font-size: 0.9rem;">
+                            Import games directly from a calendar file (.ics). Works with:
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-bottom: 20px; padding-left: 24px; font-size: 0.9rem;">
+                            <li><strong>Google Calendar</strong> — Export from Settings → Import/Export</li>
+                            <li><strong>Apple Calendar</strong> — File → Export → Export...</li>
+                            <li><strong>Outlook</strong> — File → Save Calendar</li>
+                            <li><strong>Any .ics file</strong> from your league scheduler</li>
+                        </ul>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">
+                            💡 Tip: Events named "vs Pirates" or "@ Dodgers" will auto-detect the opponent.
+                        </p>
+                        <input type="file" id="calendarFileInput" accept=".ics" style="display: none;" onchange="handleCalendarImport(this.files[0])">
+                        <button class="btn btn-secondary" onclick="document.getElementById('calendarFileInput').click()" style="width: 100%; padding: 16px; font-size: 1.05rem;">
+                            📅 CHOOSE .ICS CALENDAR FILE
+                        </button>
                     </div>
                     
                     <!-- Info Section -->
@@ -1401,6 +1445,8 @@
                 renderLineupBuilder();
             } else if (sectionId === 'games') {
                 renderGameManager();
+            } else if (sectionId === 'data') {
+                renderOpponentList();
             }
         }
         
@@ -2341,6 +2387,9 @@
             const today = new Date().toISOString().split('T')[0];
             const dateInput = document.getElementById('newGameDate');
             if (dateInput) dateInput.value = today;
+            
+            // Refresh opponent dropdown from settings
+            refreshOpponentDropdown();
             
             // Render upcoming games
             const upcomingContainer = document.getElementById('upcomingGamesContainer');
@@ -4486,12 +4535,14 @@
                             <span class="rest-status ${status.class}">${status.text}</span>
                             ${isCatcher ? '<div style="color: var(--warning-yellow); font-size: 0.85rem; margin-top: 4px;">⚠️ Assigned as Catcher</div>' : ''}
                         </div>
-                        <div class="pitch-controls" style="display: flex; align-items: center; gap: 8px;">
+                        <div class="pitch-controls" style="display: flex; align-items: center; gap: 6px;">
+                            <button class="btn btn-small btn-secondary" onclick="adjustPitches(${player.id}, -5)" style="font-size: 0.7rem; padding: 4px 7px;">−5</button>
                             <button class="btn btn-small btn-secondary" onclick="adjustPitches(${player.id}, -1)">−</button>
                             <div class="pitch-display ${getCurrentPitches(player.id) >= 36 ? 'warning' : ''} ${getCurrentPitches(player.id) > 50 ? 'danger' : ''}">
                                 ${getCurrentPitches(player.id)}
                             </div>
                             <button class="btn btn-small" onclick="adjustPitches(${player.id}, 1)">+</button>
+                            <button class="btn btn-small" onclick="adjustPitches(${player.id}, 5)" style="font-size: 0.7rem; padding: 4px 7px;">+5</button>
                             <div style="display: flex; align-items: center; gap: 8px; min-width: 200px;">
                                 ${getCurrentPitches(player.id) > 50 ? `
                                     <div style="padding: 4px 8px; background: rgba(220, 38, 38, 0.1); border: 1px solid var(--alert-red); border-radius: 4px; font-size: 0.7rem; color: var(--alert-red); white-space: nowrap;">
@@ -5021,6 +5072,246 @@
         
         // Save Data
         // Export/Import/Clear Data Functions
+        // ============================================
+        // OPPONENT MANAGEMENT
+        // ============================================
+        
+        const DEFAULT_OPPONENTS = [
+            "Pirates", "Dodgers", "River Bandits", "Twins", "Trash Pandas",
+            "Blue Jays", "A's", "Yankees", "Rangers"
+        ];
+        
+        function getOpponents() {
+            const saved = localStorage.getItem('cannonBallersOpponents');
+            return saved ? JSON.parse(saved) : [...DEFAULT_OPPONENTS];
+        }
+        
+        function saveOpponents(opponents) {
+            localStorage.setItem('cannonBallersOpponents', JSON.stringify(opponents));
+        }
+        
+        function renderOpponentList() {
+            const container = document.getElementById('opponentList');
+            if (!container) return;
+            
+            const opponents = getOpponents();
+            if (opponents.length === 0) {
+                container.innerHTML = `<div style="color: var(--text-secondary); font-size: 0.9rem; text-align: center; padding: 16px;">No opponents added yet.</div>`;
+                return;
+            }
+            
+            container.innerHTML = opponents.map((name, idx) => `
+                <div style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <span style="flex: 1; color: var(--text-primary);">⚾ ${name}</span>
+                    <button class="btn btn-small btn-secondary" onclick="renameOpponent(${idx})" style="padding: 4px 10px; font-size: 0.75rem;">
+                        ✏️ Rename
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="removeOpponent(${idx})" style="padding: 4px 10px; font-size: 0.75rem;">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function addOpponent() {
+            const input = document.getElementById('newOpponentInput');
+            const name = input.value.trim();
+            
+            if (!name) {
+                alert('Please enter a team name.');
+                return;
+            }
+            
+            const opponents = getOpponents();
+            if (opponents.includes(name)) {
+                alert(`"${name}" is already in your opponent list.`);
+                return;
+            }
+            
+            opponents.push(name);
+            saveOpponents(opponents);
+            input.value = '';
+            
+            renderOpponentList();
+            refreshOpponentDropdown();
+            console.log('Opponent added:', name);
+        }
+        
+        function renameOpponent(idx) {
+            const opponents = getOpponents();
+            const current = opponents[idx];
+            const newName = prompt('Rename opponent:', current);
+            
+            if (!newName || newName.trim() === current) return;
+            
+            opponents[idx] = newName.trim();
+            saveOpponents(opponents);
+            renderOpponentList();
+            refreshOpponentDropdown();
+        }
+        
+        function removeOpponent(idx) {
+            const opponents = getOpponents();
+            const name = opponents[idx];
+            
+            if (!confirm(`Remove "${name}" from opponents list?`)) return;
+            
+            opponents.splice(idx, 1);
+            saveOpponents(opponents);
+            renderOpponentList();
+            refreshOpponentDropdown();
+        }
+        
+        function refreshOpponentDropdown() {
+            const select = document.getElementById('newGameOpponent');
+            if (!select) return;
+            
+            const opponents = getOpponents();
+            const current = select.value;
+            
+            select.innerHTML = '<option value="">Select Team</option>' +
+                opponents.map(o => `<option value="${o}" ${o === current ? 'selected' : ''}>${o}</option>`).join('');
+        }
+
+        // ============================================
+        // CALENDAR IMPORT (.ics)
+        // ============================================
+        
+        function handleCalendarImport(file) {
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const icsText = e.target.result;
+                    const events = parseICS(icsText);
+                    
+                    if (events.length === 0) {
+                        alert('No events found in the calendar file.\n\nMake sure the file contains VEVENT entries.');
+                        return;
+                    }
+                    
+                    // Preview what was found
+                    const preview = events.slice(0, 5).map(ev =>
+                        `• ${ev.date} — ${ev.summary}`
+                    ).join('\n');
+                    
+                    const more = events.length > 5 ? `\n...and ${events.length - 5} more` : '';
+                    
+                    const confirmed = confirm(
+                        `📅 CALENDAR IMPORT\n\n` +
+                        `Found ${events.length} event(s):\n\n` +
+                        preview + more +
+                        `\n\nImport these as games?\n` +
+                        `(You can set opponents after importing)`
+                    );
+                    
+                    if (!confirmed) return;
+                    
+                    let imported = 0;
+                    let skipped = 0;
+                    
+                    events.forEach(ev => {
+                        // Skip events that don't look like games
+                        if (!ev.date) { skipped++; return; }
+                        
+                        // Check for duplicate (same date + location)
+                        const duplicate = seasonData.games.find(g =>
+                            g.date === ev.date && g.location === ev.location
+                        );
+                        if (duplicate) { skipped++; return; }
+                        
+                        // Build game record
+                        const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                        const newGame = {
+                            id: gameId,
+                            date: ev.date,
+                            opponent: ev.opponent || '',
+                            location: ev.location || 'Away',
+                            lineup: {},
+                            battingOrder: [],
+                            pitching: {},
+                            pitchingDetails: {},
+                            pitcherChanges: [],
+                            batting: {},
+                            unavailablePlayers: [],
+                            inningsPlayed: 6,
+                            status: 'not-started'
+                        };
+                        
+                        seasonData.games.push(newGame);
+                        imported++;
+                    });
+                    
+                    saveData();
+                    renderGameManager();
+                    
+                    alert(
+                        `✅ Calendar Import Complete!\n\n` +
+                        `Imported: ${imported} game(s)\n` +
+                        `Skipped: ${skipped} (duplicates or invalid)\n\n` +
+                        `Go to GAME MANAGER to see your imported games.\n` +
+                        `Don't forget to set opponents for any blank ones.`
+                    );
+                    
+                } catch (err) {
+                    console.error('Calendar import error:', err);
+                    alert('❌ Error reading calendar file: ' + err.message +
+                          '\n\nMake sure it is a valid .ics file.');
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function parseICS(icsText) {
+            const events = [];
+            // Split into individual VEVENT blocks
+            const eventBlocks = icsText.split('BEGIN:VEVENT');
+            
+            eventBlocks.slice(1).forEach(block => {
+                const end = block.indexOf('END:VEVENT');
+                const eventText = block.substring(0, end);
+                
+                // Extract fields
+                const get = (field) => {
+                    const match = eventText.match(new RegExp(`${field}[^:]*:([^\\r\\n]+)`));
+                    return match ? match[1].trim() : '';
+                };
+                
+                // Parse date - handles DTSTART;TZID=... and DTSTART:
+                const dtStart = get('DTSTART');
+                let date = '';
+                if (dtStart) {
+                    // Format: 20260315 or 20260315T143000
+                    const digits = dtStart.replace(/[^0-9]/g, '');
+                    if (digits.length >= 8) {
+                        const y = digits.substr(0, 4);
+                        const m = digits.substr(4, 2);
+                        const d = digits.substr(6, 2);
+                        date = `${y}-${m}-${d}`;
+                    }
+                }
+                
+                const summary = get('SUMMARY') || 'Game';
+                const location = get('LOCATION') || '';
+                
+                // Try to extract opponent from summary
+                // Common formats: "vs Pirates", "@ Dodgers", "Pirates vs Cannon Ballers"
+                let opponent = '';
+                const vsMatch = summary.match(/vs\.?\s+(.+)/i);
+                const atMatch = summary.match(/@\s+(.+)/i);
+                if (vsMatch) opponent = vsMatch[1].trim();
+                else if (atMatch) opponent = atMatch[1].trim();
+                
+                if (date) {
+                    events.push({ date, summary, location, opponent });
+                }
+            });
+            
+            return events;
+        }
+        
         function exportAllData() {
             try {
                 // Gather all data
@@ -5298,7 +5589,7 @@
             
             // Now initialize the app
             renderRoster();
-            renderGameManager();
+            renderGameManager(); // This also calls refreshOpponentDropdown
             renderLineupBuilder();
             renderPitchCounter();
         }
