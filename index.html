@@ -1227,10 +1227,30 @@
                         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">
                             💡 Tip: Events named "vs Pirates" or "@ Dodgers" will auto-detect the opponent.
                         </p>
+                        
+                        <!-- File Upload Option -->
                         <input type="file" id="calendarFileInput" accept=".ics" style="display: none;" onchange="handleCalendarImport(this.files[0])">
-                        <button class="btn btn-secondary" onclick="document.getElementById('calendarFileInput').click()" style="width: 100%; padding: 16px; font-size: 1.05rem;">
-                            📅 CHOOSE .ICS CALENDAR FILE
+                        <button class="btn btn-secondary" onclick="document.getElementById('calendarFileInput').click()" style="width: 100%; padding: 16px; font-size: 1.05rem; margin-bottom: 12px;">
+                            📁 UPLOAD .ICS FILE
                         </button>
+                        
+                        <!-- URL Input Option -->
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">
+                                Or paste a public calendar URL:
+                            </p>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="url" id="calendarUrlInput" placeholder="https://calendar.google.com/...ics" 
+                                       style="flex: 1; padding: 12px 14px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.95rem;"
+                                       onkeydown="if(event.key==='Enter') handleCalendarURL(event)">
+                                <button class="btn" onclick="handleCalendarURL(event)" style="padding: 12px 24px; white-space: nowrap;">
+                                    📥 Import
+                                </button>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 8px;">
+                                💡 Get URL from Google Calendar: Settings → Calendar → Integrate → Public URL (must be public)
+                            </p>
+                        </div>
                     </div>
                     
                     <!-- Info Section -->
@@ -3787,6 +3807,8 @@
         }
         
         function assignPosition(inningIdx, position) {
+            console.log('assignPosition called:', { inningIdx, position, inningDisplay: innings[inningIdx] });
+            
             if (!currentGame.id) {
                 alert('Please create a game first in GAME MANAGER');
                 return;
@@ -3794,6 +3816,8 @@
             
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
+            
+            console.log('Available players:', availablePlayers.length);
             
             // Get already assigned players in THIS inning (exclude current position AND bench)
             const assignedInInning = [];
@@ -5176,6 +5200,174 @@
         // ============================================
         // CALENDAR IMPORT (.ics)
         // ============================================
+        
+        function handleCalendarURL(event) {
+            const input = document.getElementById('calendarUrlInput');
+            const url = input.value.trim();
+            
+            if (!url) {
+                alert('Please enter a calendar URL.');
+                return;
+            }
+            
+            // Validate URL format
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                alert('Please enter a valid URL starting with http:// or https://');
+                return;
+            }
+            
+            // Show loading state - get button from event or find it
+            const btn = event ? event.target : document.querySelector('button[onclick*="handleCalendarURL"]');
+            let originalText = '📥 Import'; // Default fallback
+            
+            if (btn) {
+                originalText = btn.textContent;
+                btn.textContent = '⏳ Loading...';
+                btn.disabled = true;
+            }
+            
+            console.log('Fetching calendar from URL:', url);
+            
+            // Try direct fetch first, fall back to CORS proxy if blocked
+            const attemptFetch = (fetchUrl) => {
+                return fetch(fetchUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/calendar,text/plain,*/*'
+                    }
+                })
+                .then(response => {
+                    console.log('Fetch response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.text();
+                });
+            };
+            
+            // Try direct fetch
+            attemptFetch(url)
+                .catch(directError => {
+                    console.warn('⚠️ Direct fetch failed (this is normal):', directError.message);
+                    console.log('🔄 Trying CORS proxy to bypass browser security...');
+                    
+                    // Try CORS proxy (public service)
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                    return attemptFetch(proxyUrl)
+                        .catch(proxyError => {
+                            console.error('❌ CORS proxy also failed:', proxyError);
+                            throw new Error(
+                                '❌ UNABLE TO IMPORT FROM URL\n\n' +
+                                '📁 RECOMMENDED SOLUTION:\n' +
+                                'Use file upload instead (it always works!):\n\n' +
+                                '1. Export your calendar as .ics file:\n' +
+                                '   • Google Calendar: Settings → Import/Export\n' +
+                                '   • Download the .ics file\n\n' +
+                                '2. Click "📁 UPLOAD .ICS FILE" button above\n\n' +
+                                '3. Select your downloaded .ics file\n\n' +
+                                '────────────────────────────\n' +
+                                'WHY URL IMPORT FAILED:\n' +
+                                '• Calendar may not be public\n' +
+                                '• Browser security blocking request\n' +
+                                '• URL format incorrect\n\n' +
+                                `Error: ${directError.message}`
+                            );
+                        });
+                })
+                .then(icsText => {
+                    console.log('Calendar data received, length:', icsText.length);
+                    
+                    // Verify it's actually ICS data
+                    if (!icsText.includes('BEGIN:VCALENDAR')) {
+                        throw new Error('The URL did not return a valid calendar file.\n\nMake sure you copied the ICS link (not the HTML link).');
+                    }
+                    
+                    // Process the ICS data
+                    const events = parseICS(icsText);
+                    console.log('Parsed events:', events.length);
+                    
+                    if (events.length === 0) {
+                        alert('No events found in the calendar.\n\nThe calendar might be empty or the date range might not include any events.');
+                        return;
+                    }
+                    
+                    // Preview what was found
+                    const preview = events.slice(0, 5).map(ev =>
+                        `• ${ev.date} — ${ev.summary}`
+                    ).join('\n');
+                    
+                    const more = events.length > 5 ? `\n...and ${events.length - 5} more` : '';
+                    
+                    const confirmed = confirm(
+                        `📅 CALENDAR IMPORT\n\n` +
+                        `Found ${events.length} event(s):\n\n` +
+                        preview + more +
+                        `\n\nImport these as games?`
+                    );
+                    
+                    if (!confirmed) return;
+                    
+                    let imported = 0;
+                    let skipped = 0;
+                    
+                    events.forEach(ev => {
+                        // Skip events that don't look like games
+                        if (!ev.date) { skipped++; return; }
+                        
+                        // Check for duplicate (same date + location)
+                        const duplicate = seasonData.games.find(g =>
+                            g.date === ev.date && g.location === ev.location
+                        );
+                        if (duplicate) { skipped++; return; }
+                        
+                        // Build game record
+                        const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                        const newGame = {
+                            id: gameId,
+                            date: ev.date,
+                            opponent: ev.opponent || '',
+                            location: ev.location || 'Away',
+                            lineup: {},
+                            battingOrder: [],
+                            pitching: {},
+                            pitchingDetails: {},
+                            pitcherChanges: [],
+                            batting: {},
+                            unavailablePlayers: [],
+                            inningsPlayed: 6,
+                            status: 'not-started'
+                        };
+                        
+                        seasonData.games.push(newGame);
+                        imported++;
+                    });
+                    
+                    saveData();
+                    renderGameManager();
+                    
+                    // Clear input
+                    input.value = '';
+                    
+                    alert(
+                        `✅ Calendar Import Complete!\n\n` +
+                        `Imported: ${imported} game(s)\n` +
+                        `Skipped: ${skipped} (duplicates or invalid)\n\n` +
+                        `Go to GAME MANAGER to see your imported games.`
+                    );
+                    
+                })
+                .catch(err => {
+                    console.error('Calendar URL import error:', err);
+                    alert('❌ ' + err.message);
+                })
+                .finally(() => {
+                    // Restore button state
+                    if (btn) {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }
+                });
+        }
         
         function handleCalendarImport(file) {
             if (!file) return;
