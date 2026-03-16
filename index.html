@@ -931,6 +931,9 @@
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
     </style>
+    
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -1320,6 +1323,31 @@
         // ============================================
         // HELPER FUNCTIONS
         // ============================================
+        
+        /**
+         * Format date string for display without timezone issues
+         * @param {string} dateStr - Date in YYYY-MM-DD format
+         * @param {object} options - Optional formatting options
+         * @returns {string} Formatted date
+         */
+        function formatGameDate(dateStr, options = null) {
+            if (!dateStr) return 'No date';
+            
+            // Parse the date components directly (avoids timezone issues)
+            const [year, month, day] = dateStr.split('-').map(Number);
+            
+            // Create date using local timezone
+            const date = new Date(year, month - 1, day);
+            
+            // Default format
+            const defaultOptions = {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            };
+            
+            return date.toLocaleDateString('en-US', options || defaultOptions);
+        }
         
         /**
          * Get innings to display based on game's inningsPlayed setting
@@ -2000,7 +2028,7 @@
                             GAME vs ${game.opponent}
                         </h2>
                         <div style="color: var(--text-secondary);">
-                            ${new Date(game.date).toLocaleDateString()} • ${game.location} • ${inningsPlayed} ${inningsPlayed === 1 ? 'Inning' : 'Innings'}
+                            ${formatGameDate(game.date)} • ${game.location} • ${inningsPlayed} ${inningsPlayed === 1 ? 'Inning' : 'Innings'}
                         </div>
                     </div>
                     
@@ -2430,7 +2458,7 @@
                 upcomingContainer.innerHTML = upcomingGames
                     .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .map(game => {
-                        const gameDate = new Date(game.date).toLocaleDateString('en-US', {
+                        const gameDate = formatGameDate(game.date, {
                             weekday: 'short',
                             month: 'short',
                             day: 'numeric'
@@ -2483,7 +2511,7 @@
                             <div class="game-details">
                                 <div class="game-title">vs ${game.opponent}</div>
                                 <div class="game-meta">
-                                    ${new Date(game.date).toLocaleDateString()} • ${game.location}
+                                    ${formatGameDate(game.date)} • ${game.location}
                                 </div>
                             </div>
                             <div class="game-actions">
@@ -2553,6 +2581,27 @@
             }
         }
         
+        function updateJerseyNumber(playerId, value) {
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+            
+            // Parse as number, null if empty
+            const jerseyNum = value === '' ? null : parseInt(value, 10);
+            
+            // Validate range
+            if (jerseyNum !== null && (jerseyNum < 0 || jerseyNum > 99)) {
+                alert('Jersey number must be between 0 and 99');
+                return;
+            }
+            
+            player.number = jerseyNum;
+            
+            // Save to localStorage
+            localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            
+            console.log(`Updated ${player.name} jersey number to ${jerseyNum}`);
+        }
+        
         function renderRoster() {
             // Render season stats
             const grid = document.getElementById('rosterGrid');
@@ -2576,7 +2625,19 @@
                 
                 return `
                     <div class="player-card">
-                        <div class="player-name">${player.name}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div class="player-name">${player.name}</div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 0.75rem; color: var(--text-secondary);">#</label>
+                                <input type="number" 
+                                       value="${player.number || ''}" 
+                                       placeholder="00"
+                                       min="0" 
+                                       max="99"
+                                       onchange="updateJerseyNumber(${player.id}, this.value)"
+                                       style="width: 50px; padding: 4px 8px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); text-align: center; font-size: 1rem; font-weight: 700;">
+                            </div>
+                        </div>
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px;">
                             <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center;">
@@ -2700,9 +2761,10 @@
                     <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1.5px; margin-bottom: 16px; color: var(--diamond-green);">
                         BATTING ORDER
                     </h3>
-                    <div class="game-info" style="margin-bottom: 16px;">
+                    <div class="game-info" style="margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn" onclick="autoBattingOrder()">Auto-Generate Batting Order</button>
                         <button class="btn btn-secondary" onclick="clearBattingOrder()">Clear Order</button>
+                        <button class="btn" onclick="exportLineup()" style="background: var(--safe-blue);">📊 Export Lineup</button>
                     </div>
                     <div id="battingOrderList"></div>
                 </div>
@@ -2878,7 +2940,7 @@
             
             selector.innerHTML = '<option value="">-- Choose a game --</option>' + 
                 availableGames.map(game => {
-                    const gameDate = new Date(game.date).toLocaleDateString('en-US', { 
+                    const gameDate = formatGameDate(game.date, { 
                         month: 'short', 
                         day: 'numeric' 
                     });
@@ -3112,24 +3174,103 @@
             const alreadySelected = currentGame.battingOrder.filter(id => id).filter(id => id !== currentPlayerId);
             const availableForSlot = availablePlayers.filter(p => !alreadySelected.includes(p.id));
             
-            if (availableForSlot.length === 0) {
-                // If no one available, clear this slot
-                currentGame.battingOrder[index] = null;
-                saveCurrentGame();
-                renderBattingOrder();
-                return;
-            }
+            // Sort by batting average
+            const sortedPlayers = [...availableForSlot].sort((a, b) => {
+                const avgA = a.atBats > 0 ? a.hits / a.atBats : 0;
+                const avgB = b.atBats > 0 ? b.hits / b.atBats : 0;
+                return avgB - avgA;
+            });
             
-            const currentPlayerIndex = currentPlayerId ? 
-                availableForSlot.findIndex(p => p.id === currentPlayerId) : -1;
-            const nextPlayerIndex = (currentPlayerIndex + 1) % (availableForSlot.length + 1);
+            // Create modal
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
             
-            if (nextPlayerIndex === availableForSlot.length) {
-                currentGame.battingOrder[index] = null;
-            } else {
-                currentGame.battingOrder[index] = availableForSlot[nextPlayerIndex].id;
-            }
+            const currentPlayer = currentPlayerId ? roster.find(p => p.id === currentPlayerId) : null;
             
+            modal.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; border: 2px solid var(--diamond-green);">
+                    <div style="padding: 20px; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                        <h3 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1px; color: var(--diamond-green);">
+                            BATTING ORDER #${index + 1}
+                        </h3>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                            ${currentPlayer ? `Currently: ${currentPlayer.name}` : 'No player assigned'}
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 16px;">
+                        ${sortedPlayers.length > 0 ? `
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                ${currentPlayerId ? `
+                                    <button class="btn btn-danger" onclick="clearBattingSlot(${index}); document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                            style="padding: 14px; font-size: 1rem;">
+                                        🗑️ Clear This Spot
+                                    </button>
+                                ` : ''}
+                                ${sortedPlayers.map(player => {
+                                    const isCurrentlyAssigned = player.id === currentPlayerId;
+                                    const avg = player.atBats > 0 ? (player.hits / player.atBats).toFixed(3) : 'N/A';
+                                    const avgClass = avg >= 0.300 ? 'good' : avg >= 0.200 ? 'average' : '';
+                                    
+                                    return `
+                                        <button class="btn ${isCurrentlyAssigned ? '' : 'btn-secondary'}" 
+                                                onclick="selectBattingSlot(${index}, ${player.id}); document.body.removeChild(this.closest('[style*=fixed]'))"
+                                                style="padding: 14px; text-align: left; font-size: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>${player.name}</span>
+                                            <div style="display: flex; gap: 12px; align-items: center;">
+                                                <span class="batting-avg ${avgClass}" style="font-size: 0.9rem;">${avg}</span>
+                                                ${isCurrentlyAssigned ? '<span style="color: var(--diamond-green);">✓ Current</span>' : ''}
+                                            </div>
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
+                        ` : `
+                            <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+                                <div style="font-size: 2rem; margin-bottom: 12px;">😕</div>
+                                <div>No players available</div>
+                                <div style="font-size: 0.85rem; margin-top: 8px;">All players are either unavailable or already in the batting order</div>
+                                ${currentPlayerId ? `
+                                    <button class="btn btn-danger" onclick="clearBattingSlot(${index}); document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                            style="margin-top: 16px; padding: 12px 24px;">
+                                        Clear This Spot
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `}
+                    </div>
+                    
+                    <div style="padding: 16px; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-secondary" onclick="document.body.removeChild(this.parentElement.parentElement.parentElement)" style="width: 100%; padding: 12px;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+        
+        function selectBattingSlot(index, playerId) {
+            currentGame.battingOrder[index] = playerId;
+            saveCurrentGame();
+            renderBattingOrder();
+        }
+        
+        function clearBattingSlot(index) {
+            currentGame.battingOrder[index] = null;
             saveCurrentGame();
             renderBattingOrder();
         }
@@ -3852,9 +3993,28 @@
                 
                 // PITCHING RULES:
                 if (position === 'P') {
-                    // Can only pitch once per game (exclude if already pitched in another inning)
+                    // Rule: Can pitch consecutive innings, but once removed cannot return
+                    // Example: Can pitch 1-2-3, but NOT 1-2-SKIP-4
+                    
                     if (playersWhoPitched.has(p.id) && currentGame.lineup[`${inningIdx}-P`] !== p.id) {
-                        return false;
+                        // This player has pitched before. Check if it's consecutive.
+                        const pitchedInnings = [];
+                        innings.forEach((_, idx) => {
+                            if (currentGame.lineup[`${idx}-P`] === p.id) {
+                                pitchedInnings.push(idx);
+                            }
+                        });
+                        
+                        // If player pitched before, check for gaps
+                        const lastPitched = Math.max(...pitchedInnings);
+                        
+                        // Allow if current inning is immediately after last pitched inning (consecutive)
+                        const isConsecutive = (inningIdx === lastPitched + 1);
+                        
+                        if (!isConsecutive) {
+                            // There's a gap - player was removed and cannot return
+                            return false;
+                        }
                     }
                 }
                 
@@ -5096,6 +5256,338 @@
         
         // Save Data
         // Export/Import/Clear Data Functions
+        // ============================================
+        // LINEUP EXPORT (CSV & EXCEL)
+        // ============================================
+        
+        function checkLineupCompleteness() {
+            const warnings = [];
+            const inningsPlayed = currentGame.inningsPlayed || 6;
+            const inningsToShow = innings.slice(0, inningsPlayed);
+            
+            // Check batting order
+            const battingOrderFilled = currentGame.battingOrder.filter(id => id).length;
+            if (battingOrderFilled === 0) {
+                warnings.push('⚠️ Batting order is empty');
+            } else if (battingOrderFilled < 9) {
+                warnings.push(`⚠️ Batting order only has ${battingOrderFilled} players (recommended: 9-12)`);
+            }
+            
+            // Check lineup positions
+            let missingPositions = 0;
+            inningsToShow.forEach((inning, idx) => {
+                positions.forEach(pos => {
+                    const key = `${idx}-${pos}`;
+                    if (!currentGame.lineup[key]) {
+                        missingPositions++;
+                    }
+                });
+            });
+            
+            if (missingPositions > 0) {
+                warnings.push(`⚠️ ${missingPositions} position(s) not assigned in lineup`);
+            }
+            
+            return warnings;
+        }
+        
+        function exportLineup() {
+            if (!currentGame.id) {
+                alert('Please select a game first');
+                return;
+            }
+            
+            // Check for completeness
+            const warnings = checkLineupCompleteness();
+            
+            if (warnings.length > 0) {
+                const proceed = confirm(
+                    'INCOMPLETE LINEUP DETECTED:\n\n' +
+                    warnings.join('\n') +
+                    '\n\nDo you want to export anyway?'
+                );
+                
+                if (!proceed) return;
+            }
+            
+            // Show export options
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; max-width: 400px; width: 100%; border: 2px solid var(--diamond-green);">
+                    <div style="padding: 20px; border-bottom: 2px solid var(--border-color);">
+                        <h3 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1px; color: var(--diamond-green);">
+                            EXPORT LINEUP
+                        </h3>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                            Choose export format
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                        <button class="btn" onclick="exportLineupAsExcel(); document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span style="font-size: 1.3rem;">📊</span>
+                            <span>Export as Excel (.xlsx)</span>
+                        </button>
+                        
+                        <button class="btn btn-secondary" onclick="exportLineupAsCSV(); document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span style="font-size: 1.3rem;">📄</span>
+                            <span>Export as CSV</span>
+                        </button>
+                        
+                        <button class="btn btn-secondary" onclick="document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                style="padding: 12px; font-size: 0.95rem; margin-top: 8px;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+        
+        function exportLineupAsCSV() {
+            const inningsPlayed = currentGame.inningsPlayed || 6;
+            const inningsToShow = innings.slice(0, inningsPlayed);
+            const gameDate = formatGameDate(currentGame.date);
+            
+            let csv = [];
+            
+            // Game Info
+            csv.push(['CANNON BALLERS LINEUP CARD']);
+            csv.push(['Date', gameDate]);
+            csv.push(['Opponent', currentGame.opponent]);
+            csv.push(['Location', currentGame.location]);
+            csv.push([]);
+            
+            // Combined Batting Order & Positions
+            csv.push(['BATTING ORDER & POSITIONS']);
+            const headerRow = ['#', 'Jersey', 'Player', ...inningsToShow];
+            csv.push(headerRow);
+            
+            // For each batting order spot
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const jerseyNum = player && player.number ? player.number : '';
+                    
+                    // Find what positions this player plays each inning
+                    const positionsPerInning = inningsToShow.map((_, inningIdx) => {
+                        // Check all positions to find where this player is assigned
+                        for (const pos of positions) {
+                            const assignedPlayerId = currentGame.lineup[`${inningIdx}-${pos}`];
+                            if (assignedPlayerId === playerId) {
+                                return pos;
+                            }
+                        }
+                        // Check bench
+                        for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                            const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${benchNum}`];
+                            if (benchPlayerId === playerId) {
+                                return 'BENCH';
+                            }
+                        }
+                        return ''; // Not assigned this inning
+                    });
+                    
+                    csv.push([idx + 1, jerseyNum, player ? player.name : 'Unknown', ...positionsPerInning]);
+                }
+            });
+            
+            csv.push([]);
+            csv.push(['Players not in batting order:']);
+            
+            // Show players not in batting order who are still playing
+            const playersInBattingOrder = new Set(currentGame.battingOrder.filter(id => id));
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            
+            roster.forEach(player => {
+                if (!playersInBattingOrder.has(player.id) && !unavailableIds.includes(player.id)) {
+                    // Check if they're assigned anywhere
+                    let isAssigned = false;
+                    inningsToShow.forEach((_, inningIdx) => {
+                        for (const pos of positions) {
+                            if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
+                                isAssigned = true;
+                            }
+                        }
+                    });
+                    
+                    if (isAssigned) {
+                        const positionsPerInning = inningsToShow.map((_, inningIdx) => {
+                            for (const pos of positions) {
+                                if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
+                                    return pos;
+                                }
+                            }
+                            for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                                if (currentGame.lineup[`${inningIdx}-Bench${benchNum}`] === player.id) {
+                                    return 'BENCH';
+                                }
+                            }
+                            return '';
+                        });
+                        
+                        const jerseyNum = player.number || '';
+                        csv.push(['-', jerseyNum, player.name, ...positionsPerInning]);
+                    }
+                }
+            });
+            
+            // Convert to CSV string
+            const csvContent = csv.map(row => 
+                row.map(cell => {
+                    const str = String(cell || '');
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        return '"' + str.replace(/"/g, '""') + '"';
+                    }
+                    return str;
+                }).join(',')
+            ).join('\n');
+            
+            // Download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `lineup_${currentGame.opponent}_${currentGame.date}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            alert('✅ CSV exported!\n\nFile: ' + link.download);
+        }
+        
+        function exportLineupAsExcel() {
+            const inningsPlayed = currentGame.inningsPlayed || 6;
+            const inningsToShow = innings.slice(0, inningsPlayed);
+            const gameDate = formatGameDate(currentGame.date);
+            
+            // Create workbook
+            const wb = XLSX.utils.book_new();
+            
+            // Game Info
+            const infoData = [
+                ['CANNON BALLERS LINEUP CARD'],
+                [''],
+                ['Date:', gameDate],
+                ['Opponent:', currentGame.opponent],
+                ['Location:', currentGame.location],
+                ['Innings:', inningsPlayed]
+            ];
+            const infoSheet = XLSX.utils.aoa_to_sheet(infoData);
+            infoSheet['!cols'] = [{ wch: 15 }, { wch: 30 }];
+            XLSX.utils.book_append_sheet(wb, infoSheet, 'Game Info');
+            
+            // Combined Batting Order & Positions Sheet
+            const lineupData = [
+                ['BATTING ORDER & POSITIONS'],
+                [''],
+                ['#', 'Jersey', 'Player', ...inningsToShow]
+            ];
+            
+            // For each batting order spot
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const jerseyNum = player && player.number ? player.number : '';
+                    
+                    // Find what positions this player plays each inning
+                    const positionsPerInning = inningsToShow.map((_, inningIdx) => {
+                        // Check all positions
+                        for (const pos of positions) {
+                            const assignedPlayerId = currentGame.lineup[`${inningIdx}-${pos}`];
+                            if (assignedPlayerId === playerId) {
+                                return pos;
+                            }
+                        }
+                        // Check bench
+                        for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                            const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${benchNum}`];
+                            if (benchPlayerId === playerId) {
+                                return 'BENCH';
+                            }
+                        }
+                        return ''; // Not assigned this inning
+                    });
+                    
+                    lineupData.push([idx + 1, jerseyNum, player ? player.name : 'Unknown', ...positionsPerInning]);
+                }
+            });
+            
+            lineupData.push(['']);
+            lineupData.push(['Players not in batting order:']);
+            
+            // Show players not in batting order who are still playing
+            const playersInBattingOrder = new Set(currentGame.battingOrder.filter(id => id));
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            
+            roster.forEach(player => {
+                if (!playersInBattingOrder.has(player.id) && !unavailableIds.includes(player.id)) {
+                    // Check if they're assigned anywhere
+                    let isAssigned = false;
+                    inningsToShow.forEach((_, inningIdx) => {
+                        for (const pos of positions) {
+                            if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
+                                isAssigned = true;
+                            }
+                        }
+                    });
+                    
+                    if (isAssigned) {
+                        const positionsPerInning = inningsToShow.map((_, inningIdx) => {
+                            for (const pos of positions) {
+                                if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
+                                    return pos;
+                                }
+                            }
+                            for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                                if (currentGame.lineup[`${inningIdx}-Bench${benchNum}`] === player.id) {
+                                    return 'BENCH';
+                                }
+                            }
+                            return '';
+                        });
+                        
+                        const jerseyNum = player.number || '';
+                        lineupData.push(['-', jerseyNum, player.name, ...positionsPerInning]);
+                    }
+                }
+            });
+            
+            const lineupSheet = XLSX.utils.aoa_to_sheet(lineupData);
+            const cols = [
+                { wch: 5 },   // #
+                { wch: 8 },   // Jersey
+                { wch: 20 },  // Player
+                ...inningsToShow.map(() => ({ wch: 10 }))  // Innings
+            ];
+            lineupSheet['!cols'] = cols;
+            XLSX.utils.book_append_sheet(wb, lineupSheet, 'Lineup');
+            
+            // Download
+            const filename = `lineup_${currentGame.opponent}_${currentGame.date}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            
+            alert('✅ Excel file exported!\n\nFile: ' + filename);
+        }
+        
         // ============================================
         // OPPONENT MANAGEMENT
         // ============================================
