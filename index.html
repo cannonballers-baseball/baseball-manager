@@ -2788,7 +2788,10 @@
                     <div id="tierBalanceSummary" style="margin-bottom: 20px;"></div>
                     
                     <div class="game-info" style="margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn" onclick="generateLineup()">Auto-Generate All Positions</button>
+                        <button class="btn" onclick="generateLineup()">⚡ Auto-Generate Positions</button>
+                        <button class="btn btn-secondary" onclick="unlockAllPositions()" style="background: rgba(220, 38, 38, 0.1); border: 1px solid var(--alert-red);">
+                            🔓 Unlock All
+                        </button>
                         <button class="btn btn-secondary" onclick="toggleLineupView()">
                             <span id="viewToggleText">Switch to Player View</span>
                         </button>
@@ -3482,14 +3485,30 @@
                             </div>
                             <div class="positions-grid">
                                 ${positions.map(pos => {
-                                    const assignment = currentGame.lineup[`${inningIdx}-${pos}`];
+                                    const key = `${inningIdx}-${pos}`;
+                                    const assignment = currentGame.lineup[key];
                                     const player = assignment ? roster.find(p => p.id === assignment) : null;
+                                    const isLocked = currentGame.lockedPositions && currentGame.lockedPositions[key];
                                     
                                     return `
-                                        <div class="position-slot ${player ? 'filled' : ''}" 
-                                             onclick="assignPosition(${inningIdx}, '${pos}')">
-                                            <div class="position-label">${pos}</div>
-                                            ${player ? `<div class="position-player">${player.name.split(' ')[0]}</div>` : '<div style="color: var(--text-secondary); font-size: 0.8rem;">Click to assign</div>'}
+                                        <div class="position-slot ${player ? 'filled' : ''} ${isLocked ? 'locked' : ''}" 
+                                             onclick="assignPosition(${inningIdx}, '${pos}')"
+                                             style="${isLocked ? 'border: 2px solid var(--diamond-green);' : ''}">
+                                            <div class="position-label">
+                                                ${pos}
+                                                ${isLocked ? '<span style="margin-left: 4px; color: var(--diamond-green);">🔒</span>' : ''}
+                                            </div>
+                                            ${player ? `
+                                                <div class="position-player">${player.name.split(' ')[0]}</div>
+                                                ${isLocked ? '' : '<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Click to lock</div>'}
+                                            ` : '<div style="color: var(--text-secondary); font-size: 0.8rem;">Click to assign</div>'}
+                                            ${player && isLocked ? `
+                                                <button onclick="event.stopPropagation(); togglePositionLock(${inningIdx}, '${pos}')" 
+                                                        class="btn btn-small" 
+                                                        style="margin-top: 6px; padding: 3px 8px; font-size: 0.7rem; background: rgba(220, 38, 38, 0.2); border: 1px solid var(--alert-red);">
+                                                    🔓 Unlock
+                                                </button>
+                                            ` : ''}
                                         </div>
                                     `;
                                 }).join('')}
@@ -3856,6 +3875,14 @@
         }
         
         function cyclePlayerPosition(playerId, inningIdx) {
+            // Open modal to select position for this player
+            showPositionSelectorForPlayer(playerId, inningIdx);
+        }
+        
+        function showPositionSelectorForPlayer(playerId, inningIdx) {
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+            
             // Find current position
             let currentPos = null;
             let currentKey = null;
@@ -3880,54 +3907,166 @@
                 });
             }
             
-            // Remove from current position
+            // Get available positions (filter out restricted positions)
+            let availablePositions = [...positions];
+            if (player.cannotPlay && player.cannotPlay.length > 0) {
+                availablePositions = availablePositions.filter(p => !player.cannotPlay.includes(p));
+            }
+            
+            // Check pitching rules
+            const playersWhoPitched = new Set();
+            innings.forEach((_, idx) => {
+                const pitcherId = currentGame.lineup[`${idx}-P`];
+                if (pitcherId) playersWhoPitched.add(pitcherId);
+            });
+            
+            // Filter positions based on rules
+            availablePositions = availablePositions.filter(pos => {
+                // Pitching rule: Can pitch consecutive, but once removed cannot return
+                if (pos === 'P' && playersWhoPitched.has(playerId) && currentGame.lineup[`${inningIdx}-P`] !== playerId) {
+                    const pitchedInnings = [];
+                    innings.forEach((_, idx) => {
+                        if (currentGame.lineup[`${idx}-P`] === playerId) {
+                            pitchedInnings.push(idx);
+                        }
+                    });
+                    const lastPitched = Math.max(...pitchedInnings);
+                    const isConsecutive = (inningIdx === lastPitched + 1);
+                    if (!isConsecutive) return false;
+                }
+                
+                // Catcher rule: Cannot catch if already pitched
+                if (pos === 'C' && playersWhoPitched.has(playerId)) return false;
+                
+                return true;
+            });
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; border: 2px solid var(--diamond-green);">
+                    <div style="padding: 20px; border-bottom: 2px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                        <h3 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1px; color: var(--diamond-green);">
+                            SELECT POSITION FOR ${player.name}
+                        </h3>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">
+                            ${innings[inningIdx]} Inning
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 16px;">
+                        ${availablePositions.length > 0 ? `
+                            <div style="font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-secondary);">⚾ DEFENSIVE POSITIONS</div>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;">
+                                ${availablePositions.map(pos => {
+                                    const isOccupied = currentGame.lineup[`${inningIdx}-${pos}`] && currentGame.lineup[`${inningIdx}-${pos}`] !== playerId;
+                                    const isCurrent = currentPos === pos;
+                                    return `
+                                        <button class="btn ${isCurrent ? '' : 'btn-secondary'}" 
+                                                onclick="selectPositionForPlayer(${playerId}, ${inningIdx}, '${pos}')"
+                                                style="padding: 14px; text-align: center; font-size: 1rem; font-weight: 700; position: relative;">
+                                            ${pos}
+                                            ${isCurrent ? '<div style="color: var(--diamond-green); font-size: 0.75rem; margin-top: 4px;">✓ Current</div>' : ''}
+                                            ${isOccupied ? '<div style="color: var(--alert-red); font-size: 0.7rem; margin-top: 4px;">Occupied</div>' : ''}
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        <div style="font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-secondary);">🪑 BENCH</div>
+                        <button class="btn ${currentPos === 'Bench' ? '' : 'btn-secondary'}" 
+                                onclick="selectPositionForPlayer(${playerId}, ${inningIdx}, 'Bench')"
+                                style="padding: 14px; text-align: center; font-size: 1rem; width: 100%;">
+                            Bench
+                            ${currentPos === 'Bench' ? '<span style="color: var(--diamond-green); margin-left: 8px;">✓ Current</span>' : ''}
+                        </button>
+                        
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+                            ${currentPos ? `
+                                <button class="btn btn-danger" onclick="clearPlayerPosition(${playerId}, ${inningIdx})" style="flex: 1;">
+                                    ✗ Remove from Lineup
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-secondary" onclick="closePositionSelector()" style="flex: 1;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.id = 'positionSelectorModal';
+            modal.onclick = (e) => {
+                if (e.target === modal) closePositionSelector();
+            };
+            
+            document.body.appendChild(modal);
+        }
+        
+        function selectPositionForPlayer(playerId, inningIdx, newPos) {
+            // Initialize lockedPositions if needed
+            if (!currentGame.lockedPositions) {
+                currentGame.lockedPositions = {};
+            }
+            
+            // Find and remove player from current position
+            let currentKey = null;
+            positions.forEach(pos => {
+                const key = `${inningIdx}-${pos}`;
+                if (currentGame.lineup[key] === playerId) {
+                    currentKey = key;
+                    // Clear lock from old position
+                    delete currentGame.lockedPositions[key];
+                }
+            });
+            [1, 2, 3].forEach(num => {
+                const benchKey = `${inningIdx}-Bench${num}`;
+                if (currentGame.lineup[benchKey] === playerId) {
+                    currentKey = benchKey;
+                }
+            });
+            
             if (currentKey) {
                 delete currentGame.lineup[currentKey];
             }
             
-            // Get player restrictions using cannotPlay array
-            const player = roster.find(p => p.id === playerId);
-            let availablePositions = [...positions, 'Bench'];
-            
-            // Filter out positions this player cannot play
-            if (player.cannotPlay && player.cannotPlay.length > 0) {
-                availablePositions = availablePositions.filter(p => {
-                    // Bench is always available
-                    if (p === 'Bench') return true;
-                    // Filter out restricted positions
-                    return !player.cannotPlay.includes(p);
-                });
-            }
-            
-            // Find next available position
-            const currentIndex = currentPos ? availablePositions.indexOf(currentPos) : -1;
-            const nextIndex = (currentIndex + 1) % availablePositions.length;
-            const nextPos = availablePositions[nextIndex];
-            
             // Assign to new position
-            if (nextPos === 'Bench') {
+            if (newPos === 'Bench') {
                 // Find first available bench slot
-                let assigned = false;
                 for (let num = 1; num <= 3; num++) {
                     const benchKey = `${inningIdx}-Bench${num}`;
                     if (!currentGame.lineup[benchKey]) {
                         currentGame.lineup[benchKey] = playerId;
-                        assigned = true;
                         break;
                     }
                 }
-                // If all bench slots full, don't assign
             } else {
-                const newKey = `${inningIdx}-${nextPos}`;
+                const newKey = `${inningIdx}-${newPos}`;
                 
-                // Check if position is already taken
+                // If position is occupied, move that player to bench
                 if (currentGame.lineup[newKey]) {
-                    // Swap positions
                     const otherPlayerId = currentGame.lineup[newKey];
-                    if (currentKey && currentPos !== 'Bench') {
+                    
+                    // If we came from a defensive position, swap
+                    if (currentKey && !currentKey.includes('Bench')) {
                         currentGame.lineup[currentKey] = otherPlayerId;
                     } else {
-                        // Put other player on bench
+                        // Move to bench
                         for (let num = 1; num <= 3; num++) {
                             const benchKey = `${inningIdx}-Bench${num}`;
                             if (!currentGame.lineup[benchKey]) {
@@ -3935,16 +4074,45 @@
                                 break;
                             }
                         }
-                        delete currentGame.lineup[newKey];
                     }
                 }
                 
                 currentGame.lineup[newKey] = playerId;
+                
+                // Lock defensive position when manually assigned
+                currentGame.lockedPositions[newKey] = true;
             }
             
             saveCurrentGame();
+            closePositionSelector();
             renderPlayerView();
             validateLineup();
+        }
+        
+        function clearPlayerPosition(playerId, inningIdx) {
+            // Remove player from all positions in this inning
+            positions.forEach(pos => {
+                const key = `${inningIdx}-${pos}`;
+                if (currentGame.lineup[key] === playerId) {
+                    delete currentGame.lineup[key];
+                }
+            });
+            [1, 2, 3].forEach(num => {
+                const benchKey = `${inningIdx}-Bench${num}`;
+                if (currentGame.lineup[benchKey] === playerId) {
+                    delete currentGame.lineup[benchKey];
+                }
+            });
+            
+            saveCurrentGame();
+            closePositionSelector();
+            renderPlayerView();
+            validateLineup();
+        }
+        
+        function closePositionSelector() {
+            const modal = document.getElementById('positionSelectorModal');
+            if (modal) modal.remove();
         }
         
         function assignPosition(inningIdx, position) {
@@ -4136,6 +4304,11 @@
         function selectPlayerForPosition(inningIdx, position, playerId) {
             const key = `${inningIdx}-${position}`;
             
+            // Initialize lockedPositions if needed
+            if (!currentGame.lockedPositions) {
+                currentGame.lockedPositions = {};
+            }
+            
             // Check if this player is currently on the bench
             let benchSlotToClear = null;
             [1, 2, 3].forEach(num => {
@@ -4175,6 +4348,9 @@
             // Assign new player to position
             currentGame.lineup[key] = playerId;
             
+            // Lock this position by default when manually assigned
+            currentGame.lockedPositions[key] = true;
+            
             saveCurrentGame();
             closePlayerSelector();
             renderLineupBuilder();
@@ -4184,9 +4360,50 @@
             const key = `${inningIdx}-${position}`;
             delete currentGame.lineup[key];
             
+            // Also clear the lock
+            if (currentGame.lockedPositions) {
+                delete currentGame.lockedPositions[key];
+            }
+            
             saveCurrentGame();
             closePlayerSelector();
             renderLineupBuilder();
+        }
+        
+        function togglePositionLock(inningIdx, position) {
+            const key = `${inningIdx}-${position}`;
+            
+            // Initialize if needed
+            if (!currentGame.lockedPositions) {
+                currentGame.lockedPositions = {};
+            }
+            
+            // Toggle lock state
+            currentGame.lockedPositions[key] = !currentGame.lockedPositions[key];
+            
+            saveCurrentGame();
+            renderLineupBuilder();
+        }
+        
+        function unlockAllPositions() {
+            if (!currentGame.id) return;
+            
+            // Count how many positions are locked
+            let lockedCount = 0;
+            if (currentGame.lockedPositions) {
+                lockedCount = Object.values(currentGame.lockedPositions).filter(v => v).length;
+            }
+            
+            if (lockedCount === 0) {
+                alert('No positions are locked.');
+                return;
+            }
+            
+            if (confirm(`Unlock all ${lockedCount} locked position(s)? This will allow Auto-Generate to change them.`)) {
+                currentGame.lockedPositions = {};
+                saveCurrentGame();
+                renderLineupBuilder();
+            }
         }
         
         function closePlayerSelector() {
@@ -4274,8 +4491,27 @@
                 return;
             }
             
+            // Initialize lockedPositions if it doesn't exist
+            if (!currentGame.lockedPositions) {
+                currentGame.lockedPositions = {};
+            }
+            
+            // Save current locked positions before clearing
+            const savedLockedAssignments = {};
+            Object.keys(currentGame.lockedPositions).forEach(key => {
+                if (currentGame.lockedPositions[key]) {
+                    savedLockedAssignments[key] = currentGame.lineup[key];
+                }
+            });
+            
             // Auto-generate balanced lineup with bench rotation AND position tier equity
             currentGame.lineup = {};
+            
+            // Restore locked positions
+            Object.keys(savedLockedAssignments).forEach(key => {
+                currentGame.lineup[key] = savedLockedAssignments[key];
+            });
+            
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
             
@@ -4293,9 +4529,40 @@
                 // Track who's been assigned in this inning
                 const assignedThisInning = new Set();
                 
+                // Add players from locked positions to assignedThisInning
+                positions.forEach(pos => {
+                    const key = `${inningIdx}-${pos}`;
+                    if (currentGame.lockedPositions && currentGame.lockedPositions[key]) {
+                        const playerId = currentGame.lineup[key];
+                        if (playerId) assignedThisInning.add(playerId);
+                    }
+                });
+                
                 // STEP 1: Fill all 9 defensive positions first
                 // SPECIAL HANDLING: Assign PITCHER first before other positions
                 positions.forEach(pos => {
+                    const key = `${inningIdx}-${pos}`;
+                    
+                    // Skip if this position is locked
+                    if (currentGame.lockedPositions && currentGame.lockedPositions[key]) {
+                        // Update tier tracking for locked player
+                        const playerId = currentGame.lineup[key];
+                        if (playerId) {
+                            const isPremium = premiumPositions.includes(pos);
+                            const isTier2 = tier2Positions.includes(pos);
+                            if (isPremium) {
+                                gameTierCount[playerId].premium++;
+                            } else if (isTier2) {
+                                gameTierCount[playerId].tier2++;
+                            }
+                            if (pos === 'P') {
+                                gamePitcherTracking[playerId].hasPitched = true;
+                                gamePitcherTracking[playerId].inningPitched = inningIdx;
+                            }
+                        }
+                        return; // Skip auto-assignment for locked position
+                    }
+                    
                     // Determine if this position is premium or tier2
                     const isPremium = premiumPositions.includes(pos);
                     const isTier2 = tier2Positions.includes(pos);
