@@ -1355,6 +1355,17 @@
         }
         
         /**
+         * Format opponent display with vs/@ based on home/away
+         * @param {Object} game - Game object with location and opponent
+         * @returns {string} Formatted opponent string (e.g., "vs Pirates" or "@ Dodgers")
+         */
+        function formatOpponent(game) {
+            if (!game || !game.opponent) return 'TBD';
+            const isAway = game.location && game.location.toLowerCase().includes('away');
+            return isAway ? `@ ${game.opponent}` : `vs ${game.opponent}`;
+        }
+        
+        /**
          * Get innings to display based on game's inningsPlayed setting
          * @returns {Array} Array of inning labels to show (e.g., ["1st", "2nd", "3rd", "4th"])
          */
@@ -1665,7 +1676,7 @@
                 <div style="background: var(--bg-card); max-width: 700px; margin: 20px auto; border-radius: 16px; border: 2px solid var(--diamond-green);">
                     <div style="padding: 24px; border-bottom: 2px solid var(--border-color);">
                         <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 2px; margin-bottom: 8px; color: var(--diamond-green);">
-                            FINALIZE GAME vs ${game.opponent}
+                            FINALIZE GAME ${formatOpponent(game).toUpperCase()}
                         </h2>
                         <div style="color: var(--text-secondary);">
                             Enter pitch outcomes and innings played before saving
@@ -2031,7 +2042,7 @@
                 <div style="background: var(--bg-card); max-width: 900px; margin: 0 auto; border-radius: 16px; border: 2px solid var(--border-color);">
                     <div style="padding: 24px; border-bottom: 2px solid var(--border-color);">
                         <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 2px; margin-bottom: 8px;">
-                            GAME vs ${game.opponent}
+                            GAME ${formatOpponent(game).toUpperCase()}
                         </h2>
                         <div style="color: var(--text-secondary);">
                             ${formatGameDate(game.date)} • ${game.location} • ${inningsPlayed} ${inningsPlayed === 1 ? 'Inning' : 'Innings'}
@@ -2475,7 +2486,7 @@
                             <div class="game-card" style="${isActive ? 'border: 2px solid var(--diamond-green);' : ''}">
                                 <div class="game-details">
                                     <div class="game-title">
-                                        ${isActive ? '✓ ' : ''}vs ${game.opponent}
+                                        ${isActive ? '✓ ' : ''}${formatOpponent(game)}
                                     </div>
                                     <div class="game-meta">
                                         ${gameDate} • ${game.location}
@@ -2515,7 +2526,7 @@
                     .map(game => `
                         <div class="game-card">
                             <div class="game-details">
-                                <div class="game-title">vs ${game.opponent}</div>
+                                <div class="game-title">${formatOpponent(game)}</div>
                                 <div class="game-meta">
                                     ${formatGameDate(game.date)} • ${game.location}
                                 </div>
@@ -2984,7 +2995,7 @@
                     day: 'numeric' 
                 });
                 detailsSpan.textContent = 
-                    `vs ${currentGame.opponent} on ${gameDate} at ${currentGame.location}`;
+                    `${formatOpponent(currentGame)} on ${gameDate} at ${currentGame.location}`;
             }
             
             // Render all lineup building sections
@@ -3195,7 +3206,7 @@
                         day: 'numeric' 
                     });
                     return `<option value="${game.id}" ${currentGame.id === game.id ? 'selected' : ''}>
-                        ${gameDate} - vs ${game.opponent} at ${game.location}
+                        ${gameDate} - ${formatOpponent(game)} at ${game.location}
                     </option>`;
                 }).join('');
         }
@@ -5160,7 +5171,7 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                             <div>
                                 <div style="font-size: 1.3rem; font-weight: 700; color: var(--diamond-green); margin-bottom: 4px;">
-                                    vs ${currentGame.opponent}
+                                    ${formatOpponent(currentGame)}
                                 </div>
                                 <div style="color: var(--text-secondary); font-size: 0.9rem;">
                                     ${gameDate} • ${currentGame.location} • ${inningsPlayed} Innings
@@ -6734,7 +6745,7 @@
                 `🗑️ CLEAR UNSAVED GAMES\n\n` +
                 `This will delete ${unsavedGames.length} unsaved game(s):\n\n` +
                 unsavedGames.slice(0, 5).map(g => 
-                    `• ${formatGameDate(g.date)} vs ${g.opponent || 'TBD'}`
+                    `• ${formatGameDate(g.date)} ${formatOpponent(g)}`
                 ).join('\n') +
                 (unsavedGames.length > 5 ? `\n...and ${unsavedGames.length - 5} more` : '') +
                 `\n\n⚠️ Only games that have NOT been started will be deleted.\n` +
