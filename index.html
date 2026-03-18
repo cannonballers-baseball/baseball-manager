@@ -5874,6 +5874,24 @@
             localStorage.setItem('cannonBallersOpponents', JSON.stringify(opponents));
         }
         
+        function autoAddOpponent(opponentName) {
+            if (!opponentName || opponentName.trim() === '') return false;
+            
+            const name = opponentName.trim();
+            const opponents = getOpponents();
+            
+            // Check if already exists (case-insensitive)
+            const exists = opponents.some(opp => opp.toLowerCase() === name.toLowerCase());
+            if (exists) return false;
+            
+            // Add new opponent
+            opponents.push(name);
+            saveOpponents(opponents);
+            refreshOpponentDropdown();
+            
+            return true; // Return true if added
+        }
+        
         function renderOpponentList() {
             const container = document.getElementById('opponentList');
             if (!container) return;
@@ -6069,6 +6087,7 @@
                     
                     let imported = 0;
                     let skipped = 0;
+                    const newOpponents = []; // Track auto-added opponents
                     
                     events.forEach(ev => {
                         // Skip events that don't look like games
@@ -6079,6 +6098,11 @@
                             g.date === ev.date && g.location === ev.location
                         );
                         if (duplicate) { skipped++; return; }
+                        
+                        // Auto-add opponent if it doesn't exist
+                        if (ev.opponent && autoAddOpponent(ev.opponent)) {
+                            newOpponents.push(ev.opponent);
+                        }
                         
                         // Build game record
                         const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
@@ -6108,12 +6132,19 @@
                     // Clear input
                     input.value = '';
                     
-                    alert(
-                        `✅ Calendar Import Complete!\n\n` +
+                    // Build success message
+                    let message = `✅ Calendar Import Complete!\n\n` +
                         `Imported: ${imported} game(s)\n` +
-                        `Skipped: ${skipped} (duplicates or invalid)\n\n` +
-                        `Go to GAME MANAGER to see your imported games.`
-                    );
+                        `Skipped: ${skipped} (duplicates or invalid)`;
+                    
+                    if (newOpponents.length > 0) {
+                        message += `\n\n🆕 Auto-added new opponents:\n` +
+                            newOpponents.map(o => `  • ${o}`).join('\n');
+                    }
+                    
+                    message += `\n\nGo to GAME MANAGER to see your imported games.`;
+                    
+                    alert(message);
                     
                 })
                 .catch(err => {
@@ -6162,6 +6193,7 @@
                     
                     let imported = 0;
                     let skipped = 0;
+                    const newOpponents = []; // Track auto-added opponents
                     
                     events.forEach(ev => {
                         // Skip events that don't look like games
@@ -6172,6 +6204,11 @@
                             g.date === ev.date && g.location === ev.location
                         );
                         if (duplicate) { skipped++; return; }
+                        
+                        // Auto-add opponent if it doesn't exist
+                        if (ev.opponent && autoAddOpponent(ev.opponent)) {
+                            newOpponents.push(ev.opponent);
+                        }
                         
                         // Build game record
                         const gameId = `game_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
@@ -6198,13 +6235,23 @@
                     saveData();
                     renderGameManager();
                     
-                    alert(
-                        `✅ Calendar Import Complete!\n\n` +
+                    // Build success message
+                    let message = `✅ Calendar Import Complete!\n\n` +
                         `Imported: ${imported} game(s)\n` +
-                        `Skipped: ${skipped} (duplicates or invalid)\n\n` +
-                        `Go to GAME MANAGER to see your imported games.\n` +
-                        `Don't forget to set opponents for any blank ones.`
-                    );
+                        `Skipped: ${skipped} (duplicates or invalid)`;
+                    
+                    if (newOpponents.length > 0) {
+                        message += `\n\n🆕 Auto-added new opponents:\n` +
+                            newOpponents.map(o => `  • ${o}`).join('\n');
+                    }
+                    
+                    message += `\n\nGo to GAME MANAGER to see your imported games.`;
+                    
+                    if (events.some(e => !e.opponent)) {
+                        message += `\n\n⚠️ Some games had no opponent detected.\nYou can set them manually in GAME MANAGER.`;
+                    }
+                    
+                    alert(message);
                     
                 } catch (err) {
                     console.error('Calendar import error:', err);
@@ -6248,13 +6295,50 @@
                 const summary = get('SUMMARY') || 'Game';
                 const location = get('LOCATION') || '';
                 
-                // Try to extract opponent from summary
-                // Common formats: "vs Pirates", "@ Dodgers", "Pirates vs Cannon Ballers"
+                // Enhanced opponent extraction - try multiple patterns
                 let opponent = '';
-                const vsMatch = summary.match(/vs\.?\s+(.+)/i);
-                const atMatch = summary.match(/@\s+(.+)/i);
-                if (vsMatch) opponent = vsMatch[1].trim();
-                else if (atMatch) opponent = atMatch[1].trim();
+                
+                // Pattern 1: "vs Pirates" or "vs. Pirates"
+                let match = summary.match(/vs\.?\s+([A-Za-z0-9\s]+?)(?:\s*[-–—]\s*|\s*$)/i);
+                if (match) opponent = match[1].trim();
+                
+                // Pattern 2: "@ Dodgers" or "at Dodgers"
+                if (!opponent) {
+                    match = summary.match(/[@]|at\s+([A-Za-z0-9\s]+?)(?:\s*[-–—]\s*|\s*$)/i);
+                    if (match) opponent = match[1].trim();
+                }
+                
+                // Pattern 3: "Pirates vs Cannon Ballers" - extract first team
+                if (!opponent) {
+                    match = summary.match(/^([A-Za-z0-9\s]+?)\s+vs\.?\s+/i);
+                    if (match) opponent = match[1].trim();
+                }
+                
+                // Pattern 4: "Game - Pirates" or "Baseball - Pirates"
+                if (!opponent) {
+                    match = summary.match(/[-–—]\s*([A-Za-z0-9\s]+?)(?:\s*$|\s*[-–—])/);
+                    if (match && match[1]) {
+                        const potential = match[1].trim();
+                        // Avoid generic words
+                        if (!['Game', 'Baseball', 'Practice', 'Tournament'].includes(potential)) {
+                            opponent = potential;
+                        }
+                    }
+                }
+                
+                // Clean up opponent name
+                if (opponent) {
+                    // Remove trailing punctuation
+                    opponent = opponent.replace(/[.,;!?]+$/, '');
+                    // Remove common prefixes
+                    opponent = opponent.replace(/^(vs\.?|@|at)\s+/i, '');
+                    // Trim whitespace
+                    opponent = opponent.trim();
+                    // Capitalize first letter of each word
+                    opponent = opponent.split(' ').map(word => 
+                        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    ).join(' ');
+                }
                 
                 if (date) {
                     events.push({ date, summary, location, opponent });
