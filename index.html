@@ -1519,7 +1519,8 @@
                     if (playerId) assignedInInning.add(playerId);
                 });
                 
-                const expected = Math.min(availableCount, 9 + 3); // 9 positions + up to 3 bench
+                // Expected: all available players should be assigned (either on field or bench)
+                const expected = availableCount;
                 if (assignedInInning.size < expected) {
                     const missing = expected - assignedInInning.size;
                     missingAssignments.push(`Inning ${inningIdx + 1}: Missing ${missing} player${missing > 1 ? 's' : ''}`);
