@@ -957,14 +957,14 @@
         <div id="roster" class="section active">
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">SEASON STATS OVERVIEW</h2>
-                    <button class="btn btn-secondary" onclick="showSetupWizard()" style="padding: 8px 16px;">
-                        ⚙️ Edit Position Restrictions
+                    <h2 class="card-title">ROSTER MANAGEMENT</h2>
+                    <button class="btn btn-secondary" onclick="showAddPlayerModal()" style="padding: 8px 16px;">
+                        ➕ Add New Player
                     </button>
                 </div>
                 
                 <div style="margin-bottom: 20px; padding: 12px; background: rgba(26, 95, 63, 0.05); border-radius: 10px;">
-                    <strong>📊 Season Summary:</strong> Defensive innings played, pitching innings, bench time, and batting performance
+                    <strong>📊 Season Stats:</strong> Defensive innings, pitching innings, bench time, and batting performance
                 </div>
                 
                 <div class="roster-grid" id="rosterGrid"></div>
@@ -1015,9 +1015,14 @@
             
             <!-- Upcoming/In-Progress Games -->
             <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title">UPCOMING GAMES</h2>
-                    <div style="color: var(--text-secondary);" id="upcomingGamesCount">0 Games</div>
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 class="card-title">UPCOMING GAMES</h2>
+                        <div style="color: var(--text-secondary);" id="upcomingGamesCount">0 Games</div>
+                    </div>
+                    <button class="btn btn-danger btn-small" onclick="clearUnsavedGames()" style="padding: 8px 14px; font-size: 0.85rem;">
+                        🗑️ Clear Unsaved
+                    </button>
                 </div>
                 <div id="upcomingGamesContainer">
                     <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
@@ -2601,7 +2606,231 @@
             localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
             
             console.log(`Updated ${player.name} jersey number to ${jerseyNum}`);
+            
+            // Re-render to show duplicate warning if needed
+            renderRoster();
         }
+        
+        function showAddPlayerModal() {
+            // Create modal
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.8);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: var(--bg-card); border-radius: 12px; max-width: 500px; width: 100%; border: 2px solid var(--diamond-green);">
+                    <div style="padding: 20px; border-bottom: 2px solid var(--border-color);">
+                        <h3 style="margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1px; color: var(--diamond-green);">
+                            ➕ ADD NEW PLAYER
+                        </h3>
+                    </div>
+                    
+                    <div style="padding: 20px;">
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-secondary);">Player Name</label>
+                            <input type="text" id="newPlayerName" placeholder="First Last" style="width: 100%; padding: 10px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 1rem;">
+                        </div>
+                        
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-secondary);">Jersey Number (optional)</label>
+                            <input type="number" id="newPlayerNumber" placeholder="00" min="0" max="99" style="width: 100px; padding: 10px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 1rem; text-align: center;">
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px; margin-top: 20px;">
+                            <button class="btn btn-secondary" onclick="closeAddPlayerModal()" style="flex: 1;">
+                                Cancel
+                            </button>
+                            <button class="btn" onclick="addNewPlayer()" style="flex: 1;">
+                                ✓ Add Player
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.id = 'addPlayerModal';
+            modal.onclick = (e) => {
+                if (e.target === modal) closeAddPlayerModal();
+            };
+            
+            document.body.appendChild(modal);
+            
+            // Focus on name input
+            setTimeout(() => document.getElementById('newPlayerName').focus(), 100);
+        }
+        
+        function closeAddPlayerModal() {
+            const modal = document.getElementById('addPlayerModal');
+            if (modal) modal.remove();
+        }
+        
+        function addNewPlayer() {
+            const nameInput = document.getElementById('newPlayerName');
+            const numberInput = document.getElementById('newPlayerNumber');
+            
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert('Please enter a player name.');
+                nameInput.focus();
+                return;
+            }
+            
+            // Check for duplicate name
+            if (roster.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+                alert(`A player named "${name}" already exists.\n\nPlease use a different name or nickname.`);
+                nameInput.focus();
+                return;
+            }
+            
+            // Get jersey number
+            const number = numberInput.value ? parseInt(numberInput.value, 10) : null;
+            
+            // Validate number
+            if (number !== null && (number < 0 || number > 99)) {
+                alert('Jersey number must be between 0 and 99');
+                numberInput.focus();
+                return;
+            }
+            
+            // Create new player
+            const newPlayer = {
+                id: Date.now(), // Use timestamp as ID
+                name: name,
+                number: number,
+                atBats: 0,
+                hits: 0,
+                cannotPlay: []
+            };
+            
+            // Add to roster
+            roster.push(newPlayer);
+            
+            // Initialize stats for new player
+            seasonData.playingTime[newPlayer.id] = {
+                totalInnings: 0,
+                positionCounts: {}
+            };
+            seasonData.pitchingLog[newPlayer.id] = { games: [] };
+            seasonData.benchTime[newPlayer.id] = 0;
+            seasonData.positionTiers[newPlayer.id] = { premium: 0, tier2: 0 };
+            
+            // Save
+            localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            saveData();
+            
+            // Close modal and refresh
+            closeAddPlayerModal();
+            renderRoster();
+            
+            alert(`✅ ${name} added to roster!`);
+        }
+        
+        function editPlayerName(playerId) {
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+            
+            const newName = prompt(`Edit player name:\n\nCurrent: ${player.name}\n\nEnter new name:`, player.name);
+            
+            if (!newName || newName.trim() === '') {
+                return; // Cancelled or empty
+            }
+            
+            const trimmedName = newName.trim();
+            
+            // Check for duplicate
+            if (roster.some(p => p.id !== playerId && p.name.toLowerCase() === trimmedName.toLowerCase())) {
+                alert(`A player named "${trimmedName}" already exists.\n\nPlease use a different name.`);
+                return;
+            }
+            
+            // Update name
+            player.name = trimmedName;
+            
+            // Save
+            localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            
+            // Refresh
+            renderRoster();
+        }
+        
+        function removePlayer(playerId) {
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+            
+            // Count games played
+            const gamesPlayed = seasonData.games.filter(game => {
+                // Check if player appears in any lineup
+                return Object.keys(game.lineup || {}).some(key => game.lineup[key] === playerId);
+            }).length;
+            
+            let confirmMsg = `🗑️ REMOVE PLAYER\n\n` +
+                `Remove ${player.name} from roster?\n\n`;
+            
+            if (gamesPlayed > 0) {
+                confirmMsg += `⚠️ WARNING: ${player.name} has played in ${gamesPlayed} game(s).\n` +
+                    `Their stats and game history will be removed.\n\n` +
+                    `This cannot be undone!\n\n` +
+                    `Continue?`;
+            } else {
+                confirmMsg += `This player has not played in any games yet.\n\nContinue?`;
+            }
+            
+            const confirmed = confirm(confirmMsg);
+            if (!confirmed) return;
+            
+            // Remove from roster
+            const index = roster.findIndex(p => p.id === playerId);
+            if (index > -1) {
+                roster.splice(index, 1);
+            }
+            
+            // Remove from all games
+            seasonData.games.forEach(game => {
+                Object.keys(game.lineup || {}).forEach(key => {
+                    if (game.lineup[key] === playerId) {
+                        delete game.lineup[key];
+                    }
+                });
+                
+                // Remove from batting order
+                if (game.battingOrder) {
+                    game.battingOrder = game.battingOrder.map(id => id === playerId ? null : id);
+                }
+                
+                // Remove from unavailable players
+                if (game.unavailablePlayers) {
+                    game.unavailablePlayers = game.unavailablePlayers.filter(id => id !== playerId);
+                }
+            });
+            
+            // Clean up stats
+            delete seasonData.playingTime[playerId];
+            delete seasonData.pitchingLog[playerId];
+            delete seasonData.benchTime[playerId];
+            delete seasonData.positionTiers[playerId];
+            
+            // Save
+            localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            saveData();
+            
+            // Refresh
+            renderRoster();
+            renderGameManager();
+            
+            alert(`✅ ${player.name} removed from roster.`);
+        }
+        
         
         function renderRoster() {
             // Render season stats
@@ -2624,10 +2853,18 @@
                 const battingAvg = player.atBats > 0 ? (player.hits / player.atBats).toFixed(3) : '.000';
                 const avgClass = battingAvg >= '.300' ? 'good' : battingAvg >= '.200' ? 'average' : '';
                 
+                // Check for duplicate jersey numbers
+                const duplicateNumber = player.number && roster.some(p => p.id !== player.id && p.number === player.number);
+                
                 return `
                     <div class="player-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <div class="player-name">${player.name}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="flex: 1;">
+                                <div class="player-name" onclick="editPlayerName(${player.id})" style="cursor: pointer; display: flex; align-items: center; gap: 6px;" title="Click to edit name">
+                                    ${player.name}
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary);">✏️</span>
+                                </div>
+                            </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label style="font-size: 0.75rem; color: var(--text-secondary);">#</label>
                                 <input type="number" 
@@ -2636,9 +2873,18 @@
                                        min="0" 
                                        max="99"
                                        onchange="updateJerseyNumber(${player.id}, this.value)"
-                                       style="width: 50px; padding: 4px 8px; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); text-align: center; font-size: 1rem; font-weight: 700;">
+                                       style="width: 50px; padding: 4px 8px; background: var(--bg-dark); border: 1px solid ${duplicateNumber ? 'var(--alert-red)' : 'var(--border-color)'}; border-radius: 4px; color: var(--text-primary); text-align: center; font-size: 1rem; font-weight: 700;">
+                                <button class="btn btn-small btn-danger" onclick="removePlayer(${player.id})" style="padding: 4px 8px; font-size: 0.7rem;">
+                                    🗑️
+                                </button>
                             </div>
                         </div>
+                        
+                        ${duplicateNumber ? `
+                            <div style="padding: 6px 10px; background: rgba(220, 38, 38, 0.1); border: 1px solid var(--alert-red); border-radius: 6px; margin-bottom: 8px; font-size: 0.75rem; color: var(--alert-red);">
+                                ⚠️ Duplicate jersey #${player.number}
+                            </div>
+                        ` : ''}
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px;">
                             <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center;">
@@ -6473,6 +6719,38 @@
                 console.error('Clear data error:', error);
                 alert('❌ Error clearing data: ' + error.message);
             }
+        }
+        
+        function clearUnsavedGames() {
+            // Count unsaved games
+            const unsavedGames = seasonData.games.filter(g => g.status === 'not-started');
+            
+            if (unsavedGames.length === 0) {
+                alert('No unsaved games to clear.\n\nAll games are either in progress or completed.');
+                return;
+            }
+            
+            const confirmed = confirm(
+                `🗑️ CLEAR UNSAVED GAMES\n\n` +
+                `This will delete ${unsavedGames.length} unsaved game(s):\n\n` +
+                unsavedGames.slice(0, 5).map(g => 
+                    `• ${formatGameDate(g.date)} vs ${g.opponent || 'TBD'}`
+                ).join('\n') +
+                (unsavedGames.length > 5 ? `\n...and ${unsavedGames.length - 5} more` : '') +
+                `\n\n⚠️ Only games that have NOT been started will be deleted.\n` +
+                `In-progress and completed games will be kept.\n\n` +
+                `Continue?`
+            );
+            
+            if (!confirmed) return;
+            
+            // Remove unsaved games
+            seasonData.games = seasonData.games.filter(g => g.status !== 'not-started');
+            
+            saveData();
+            renderGameManager();
+            
+            alert(`✅ Cleared ${unsavedGames.length} unsaved game(s).\n\nIn-progress and completed games were preserved.`);
         }
         
         function saveData() {
