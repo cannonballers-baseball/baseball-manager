@@ -1360,9 +1360,23 @@
          * @returns {string} Formatted opponent string (e.g., "vs Pirates" or "@ Dodgers")
          */
         function formatOpponent(game) {
-            if (!game || !game.opponent) return 'TBD';
-            const isAway = game.location && game.location.toLowerCase().includes('away');
-            return isAway ? `@ ${game.opponent}` : `vs ${game.opponent}`;
+            try {
+                // Safety checks
+                if (!game) return 'TBD';
+                
+                // Get opponent safely
+                const opponent = game.opponent || '';
+                if (!opponent || opponent.trim() === '') return 'TBD';
+                
+                // Check if away game
+                const location = game.location || '';
+                const isAway = location.toLowerCase().includes('away');
+                
+                return isAway ? `@ ${opponent}` : `vs ${opponent}`;
+            } catch (error) {
+                console.error('Error in formatOpponent:', error, game);
+                return 'TBD';
+            }
         }
         
         /**
@@ -1421,6 +1435,90 @@
         // Ensure pitcherRotation exists (migration for existing data)
         if (!seasonData.pitcherRotation) {
             seasonData.pitcherRotation = {};
+        }
+        
+        // Migrate games to ensure all required fields exist
+        if (seasonData.games && seasonData.games.length > 0) {
+            let gamesMigrated = false;
+            
+            seasonData.games.forEach(game => {
+                // Ensure basic game fields
+                if (!game.location) {
+                    game.location = 'TBD';
+                    gamesMigrated = true;
+                }
+                if (!game.opponent) {
+                    game.opponent = 'TBD';
+                    gamesMigrated = true;
+                }
+                if (!game.date) {
+                    game.date = new Date().toISOString().split('T')[0];
+                    gamesMigrated = true;
+                }
+                if (!game.status) {
+                    game.status = 'not-started';
+                    gamesMigrated = true;
+                }
+                if (!game.inningsPlayed) {
+                    game.inningsPlayed = 6; // Default
+                    gamesMigrated = true;
+                }
+                
+                // Ensure lineup exists
+                if (!game.lineup) {
+                    game.lineup = {};
+                    gamesMigrated = true;
+                }
+                
+                // Ensure batting order exists
+                if (!game.battingOrder) {
+                    game.battingOrder = [];
+                    gamesMigrated = true;
+                }
+                
+                // Ensure pitching exists
+                if (!game.pitching) {
+                    game.pitching = {};
+                    gamesMigrated = true;
+                }
+                
+                // Ensure unavailable players list exists
+                if (!game.unavailablePlayers) {
+                    game.unavailablePlayers = [];
+                    gamesMigrated = true;
+                }
+                
+                // Ensure pitchingDetails exists and has all fields
+                if (!game.pitchingDetails) {
+                    game.pitchingDetails = {};
+                    gamesMigrated = true;
+                }
+                
+                // Migrate pitchingDetails to include all fields for all pitchers
+                Object.keys(game.pitchingDetails).forEach(playerId => {
+                    const details = game.pitchingDetails[playerId];
+                    if (!details.hasOwnProperty('inningsPitched')) {
+                        details.inningsPitched = 0;
+                        gamesMigrated = true;
+                    }
+                    if (!details.hasOwnProperty('hitsAllowed')) {
+                        details.hitsAllowed = 0;
+                        gamesMigrated = true;
+                    }
+                    // Ensure all other fields exist
+                    if (!details.hasOwnProperty('strikes')) details.strikes = 0;
+                    if (!details.hasOwnProperty('balls')) details.balls = 0;
+                    if (!details.hasOwnProperty('strikeouts')) details.strikeouts = 0;
+                    if (!details.hasOwnProperty('walks')) details.walks = 0;
+                    if (!details.hasOwnProperty('hitBatters')) details.hitBatters = 0;
+                });
+            });
+            
+            // Save if we migrated any games
+            if (gamesMigrated) {
+                localStorage.setItem('cannonBallersData', JSON.stringify(seasonData));
+                console.log('Games migrated to include all required fields');
+            }
         }
         
         // Initialize pitching log for each player
@@ -1709,6 +1807,17 @@
                                     
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                                         <div>
+                                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Innings Pitched (IP)</label>
+                                            <input type="number" id="inningsPitched_${pitcher.id}" min="0" max="6" step="0.1" value="0" 
+                                                   style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Use .1 or .2 for partial</div>
+                                        </div>
+                                        <div>
+                                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Hits Allowed (H)</label>
+                                            <input type="number" id="hitsAllowed_${pitcher.id}" min="0" value="0" 
+                                                   style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                        </div>
+                                        <div>
                                             <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Strikes</label>
                                             <input type="number" id="strikes_${pitcher.id}" min="0" value="0" 
                                                    style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
@@ -1777,6 +1886,8 @@
             
             Object.entries(game.pitching || {}).forEach(([playerId, totalPitches]) => {
                 if (totalPitches > 0) {
+                    const inningsPitched = parseFloat(document.getElementById(`inningsPitched_${playerId}`)?.value || 0);
+                    const hitsAllowed = parseInt(document.getElementById(`hitsAllowed_${playerId}`)?.value || 0);
                     const strikes = parseInt(document.getElementById(`strikes_${playerId}`)?.value || 0);
                     const balls = parseInt(document.getElementById(`balls_${playerId}`)?.value || 0);
                     const strikeouts = parseInt(document.getElementById(`strikeouts_${playerId}`)?.value || 0);
@@ -1795,6 +1906,8 @@
                     
                     game.pitchingDetails[playerId] = {
                         totalPitches,
+                        inningsPitched,
+                        hitsAllowed,
                         strikes,
                         balls,
                         strikeouts,
@@ -2045,7 +2158,7 @@
                             GAME ${formatOpponent(game).toUpperCase()}
                         </h2>
                         <div style="color: var(--text-secondary);">
-                            ${formatGameDate(game.date)} • ${game.location} • ${inningsPlayed} ${inningsPlayed === 1 ? 'Inning' : 'Innings'}
+                            ${formatGameDate(game.date)} • ${game.location || 'TBD'} • ${inningsPlayed} ${inningsPlayed === 1 ? 'Inning' : 'Innings'}
                         </div>
                     </div>
                     
@@ -2099,12 +2212,14 @@
                                     <thead>
                                         <tr>
                                             <th>PITCHER</th>
+                                            <th>IP</th>
                                             <th>PITCHES</th>
+                                            <th>HITS</th>
                                             <th>STRIKES</th>
                                             <th>BALLS</th>
-                                            <th>STRIKEOUTS</th>
-                                            <th>WALKS</th>
-                                            <th>HIT BATTERS</th>
+                                            <th>K</th>
+                                            <th>BB</th>
+                                            <th>HBP</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -2114,7 +2229,9 @@
                                             return pitches > 0 ? `
                                                 <tr>
                                                     <td style="font-weight: 700;">${player?.name || 'Unknown'}</td>
+                                                    <td style="font-weight: 700; color: var(--diamond-green);">${details.inningsPitched || 0}</td>
                                                     <td>${pitches}</td>
+                                                    <td>${details.hitsAllowed || 0}</td>
                                                     <td>${details.strikes || 0}</td>
                                                     <td>${details.balls || 0}</td>
                                                     <td>${details.strikeouts || 0}</td>
@@ -2489,7 +2606,7 @@
                                         ${isActive ? '✓ ' : ''}${formatOpponent(game)}
                                     </div>
                                     <div class="game-meta">
-                                        ${gameDate} • ${game.location}
+                                        ${gameDate} • ${game.location || 'TBD'}
                                     </div>
                                 </div>
                                 <div class="game-actions">
@@ -2528,7 +2645,7 @@
                             <div class="game-details">
                                 <div class="game-title">${formatOpponent(game)}</div>
                                 <div class="game-meta">
-                                    ${formatGameDate(game.date)} • ${game.location}
+                                    ${formatGameDate(game.date)} • ${game.location || 'TBD'}
                                 </div>
                             </div>
                             <div class="game-actions">
@@ -2995,7 +3112,7 @@
                     day: 'numeric' 
                 });
                 detailsSpan.textContent = 
-                    `${formatOpponent(currentGame)} on ${gameDate} at ${currentGame.location}`;
+                    `${formatOpponent(currentGame)} on ${gameDate} at ${currentGame.location || 'TBD'}`;
             }
             
             // Render all lineup building sections
@@ -3206,7 +3323,7 @@
                         day: 'numeric' 
                     });
                     return `<option value="${game.id}" ${currentGame.id === game.id ? 'selected' : ''}>
-                        ${gameDate} - ${formatOpponent(game)} at ${game.location}
+                        ${gameDate} - ${formatOpponent(game)} at ${game.location || 'TBD'}
                     </option>`;
                 }).join('');
         }
@@ -5174,7 +5291,7 @@
                                     ${formatOpponent(currentGame)}
                                 </div>
                                 <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                                    ${gameDate} • ${currentGame.location} • ${inningsPlayed} Innings
+                                    ${gameDate} • ${currentGame.location || 'TBD'} • ${inningsPlayed} Innings
                                 </div>
                             </div>
                         </div>
@@ -5896,8 +6013,8 @@
             // Game Info
             csv.push(['CANNON BALLERS LINEUP CARD']);
             csv.push(['Date', gameDate]);
-            csv.push(['Opponent', currentGame.opponent]);
-            csv.push(['Location', currentGame.location]);
+            csv.push(['Opponent', currentGame.opponent || 'TBD']);
+            csv.push(['Location', currentGame.location || 'TBD']);
             csv.push([]);
             
             // Combined Batting Order & Positions
@@ -6012,8 +6129,8 @@
                 ['CANNON BALLERS LINEUP CARD'],
                 [''],
                 ['Date:', gameDate],
-                ['Opponent:', currentGame.opponent],
-                ['Location:', currentGame.location],
+                ['Opponent:', currentGame.opponent || 'TBD'],
+                ['Location:', currentGame.location || 'TBD'],
                 ['Innings:', inningsPlayed]
             ];
             const infoSheet = XLSX.utils.aoa_to_sheet(infoData);
@@ -6609,12 +6726,13 @@
             try {
                 // Gather all data
                 const exportData = {
-                    version: '1.0',
+                    version: '1.2', // Incremented for inningsPitched field
                     appName: 'Baseball Manager',
                     exportDate: new Date().toISOString(),
                     teamName: 'Cannon Ballers', // Could be customized in future
                     roster: localStorage.getItem('cannonBallersRoster'),
-                    seasonData: localStorage.getItem('cannonBallersData')
+                    seasonData: localStorage.getItem('cannonBallersData'),
+                    features: ['inningsPitched', 'hitsAllowed', 'pitchingDetails', 'positionTiers', 'pitcherRotation']
                 };
                 
                 // Create downloadable file
