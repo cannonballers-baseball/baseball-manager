@@ -1384,8 +1384,9 @@
          * @returns {Array} Array of inning labels to show (e.g., ["1st", "2nd", "3rd", "4th"])
          */
         function getInningsToShow() {
-            const inningsPlayed = currentGame.inningsPlayed || 6;
-            return innings.slice(0, inningsPlayed);
+            // Always show all 6 innings for planning purposes
+            // Visual distinction will show which were actually played
+            return innings; // [0, 1, 2, 3, 4, 5]
         }
         
         /**
