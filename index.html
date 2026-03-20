@@ -2127,6 +2127,99 @@
             }
         }
         
+        function populateCopyLineupSelector() {
+            const selector = document.getElementById('copyLineupSelector');
+            if (!selector) return;
+            
+            // Get all games except the current one
+            const availableGames = seasonData.games.filter(g => g.id !== currentGame.id);
+            
+            // Sort by date (most recent first)
+            availableGames.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // Clear existing options except the first one
+            selector.innerHTML = '<option value="">-- Select a game to copy from --</option>';
+            
+            // Add games to dropdown
+            availableGames.forEach(game => {
+                const option = document.createElement('option');
+                option.value = game.id;
+                
+                const gameDate = new Date(game.date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                
+                const status = game.status === 'completed' ? '✓' : '⏳';
+                const opponent = formatOpponent(game);
+                
+                option.textContent = `${status} ${gameDate} - ${opponent} (${game.inningsPlayed || 6} inn)`;
+                
+                selector.appendChild(option);
+            });
+            
+            // Show count
+            if (availableGames.length === 0) {
+                selector.innerHTML = '<option value="">-- No games available to copy from --</option>';
+                selector.disabled = true;
+            } else {
+                selector.disabled = false;
+            }
+        }
+        
+        function copyFromSelectedGame() {
+            try {
+                const selector = document.getElementById('copyLineupSelector');
+                const selectedGameId = selector.value;
+                
+                if (!selectedGameId) {
+                    alert('Please select a game to copy from');
+                    return;
+                }
+                
+                if (!currentGame.id) {
+                    alert('Please create or select a game first in LINEUP BUILDER before copying a lineup.');
+                    return;
+                }
+                
+                const sourceGame = seasonData.games.find(g => g.id === selectedGameId);
+                if (!sourceGame) {
+                    alert('Error: Source game not found');
+                    return;
+                }
+                
+                const gameDate = new Date(sourceGame.date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                const opponent = formatOpponent(sourceGame);
+                
+                if (!confirm(`Copy lineup from ${gameDate} - ${opponent}?\n\nThis will replace your current lineup, batting order, and unavailable players.`)) {
+                    return;
+                }
+                
+                // Deep copy lineup data
+                currentGame.lineup = JSON.parse(JSON.stringify(sourceGame.lineup || {}));
+                currentGame.battingOrder = JSON.parse(JSON.stringify(sourceGame.battingOrder || []));
+                currentGame.unavailablePlayers = JSON.parse(JSON.stringify(sourceGame.unavailablePlayers || []));
+                currentGame.inningsPlayed = sourceGame.inningsPlayed || 6;
+                
+                if (sourceGame.lockedPositions) {
+                    currentGame.lockedPositions = JSON.parse(JSON.stringify(sourceGame.lockedPositions));
+                }
+                
+                saveCurrentGame();
+                
+                alert(`✓ Lineup copied from ${gameDate} - ${opponent}!\n\n• ${Object.keys(currentGame.lineup).length} position assignments\n• ${currentGame.battingOrder.length} players in batting order\n• ${currentGame.unavailablePlayers.length} unavailable players\n• ${currentGame.inningsPlayed} innings`);
+                
+                // Refresh all lineup displays
+                renderLineupBuilder();
+            } catch (error) {
+                console.error('Error copying lineup:', error);
+                alert('Error copying lineup. Check console for details.');
+            }
+        }
+        
         function viewGame(gameId) {
             const game = seasonData.games.find(g => g.id === gameId);
             if (!game) return;
@@ -3198,6 +3291,25 @@
                         <button class="btn btn-secondary" onclick="clearBattingOrder()">Clear Order</button>
                         <button class="btn" onclick="exportLineup()" style="background: var(--safe-blue);">📊 Export Lineup</button>
                     </div>
+                    
+                    <!-- Copy Lineup from Previous Game -->
+                    <div style="margin-bottom: 16px; padding: 16px; background: rgba(26, 95, 63, 0.1); border: 2px solid var(--diamond-green); border-radius: 10px;">
+                        <div style="font-weight: 700; margin-bottom: 8px; color: var(--diamond-green);">
+                            📋 COPY LINEUP FROM PREVIOUS GAME
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+                            Select a game to copy its lineup, batting order, and unavailable players into this game
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="copyLineupSelector" style="flex: 1; padding: 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.95rem;">
+                                <option value="">-- Select a game to copy from --</option>
+                            </select>
+                            <button class="btn" onclick="copyFromSelectedGame()" style="padding: 10px 20px; white-space: nowrap; background: var(--diamond-green);">
+                                Copy Lineup
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div id="battingOrderList"></div>
                 </div>
                 
@@ -3241,6 +3353,7 @@
             renderVisualLineup();
             renderTierBalanceSummary();
             renderPositionGrid();
+            populateCopyLineupSelector();
             // Don't validate during building - only validate when finalizing game
             // validateLineup();
         }
