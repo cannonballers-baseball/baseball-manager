@@ -2074,6 +2074,59 @@
             renderPitchCounter();
         }
         
+        function copyLineupFromGame(gameId) {
+            try {
+                const sourceGame = seasonData.games.find(g => g.id === gameId);
+                if (!sourceGame) {
+                    alert('Error: Source game not found');
+                    return;
+                }
+                
+                // Must have a current game selected to copy into
+                if (!currentGame.id) {
+                    alert('Please create or select a game first in LINEUP BUILDER before copying a lineup.');
+                    return;
+                }
+                
+                if (!confirm('Copy lineup, batting order, and unavailable players from this game into the current game?\n\nThis will replace your current lineup.')) {
+                    return;
+                }
+                
+                // Copy lineup (all position assignments for all innings)
+                currentGame.lineup = JSON.parse(JSON.stringify(sourceGame.lineup || {}));
+                
+                // Copy batting order
+                currentGame.battingOrder = JSON.parse(JSON.stringify(sourceGame.battingOrder || []));
+                
+                // Copy unavailable players
+                currentGame.unavailablePlayers = JSON.parse(JSON.stringify(sourceGame.unavailablePlayers || []));
+                
+                // Copy innings played setting
+                currentGame.inningsPlayed = sourceGame.inningsPlayed || 6;
+                
+                // Copy locked positions if they exist
+                if (sourceGame.lockedPositions) {
+                    currentGame.lockedPositions = JSON.parse(JSON.stringify(sourceGame.lockedPositions));
+                }
+                
+                // DON'T copy pitching, batting stats, or completion status - those are game-specific
+                
+                saveCurrentGame();
+                
+                // Close the view modal
+                document.querySelector('[style*="position: fixed"]')?.remove();
+                
+                alert('✓ Lineup copied successfully!\n\n• ' + Object.keys(currentGame.lineup).length + ' position assignments\n• ' + currentGame.battingOrder.length + ' players in batting order\n• ' + currentGame.unavailablePlayers.length + ' unavailable players\n• ' + currentGame.inningsPlayed + ' innings\n\nGo to LINEUP BUILDER to review and make any adjustments.');
+                
+                // Refresh lineup builder to show copied data
+                showSection('lineup');
+                renderLineupBuilder();
+            } catch (error) {
+                console.error('Error copying lineup:', error);
+                alert('Error copying lineup. Check console for details.');
+            }
+        }
+        
         function viewGame(gameId) {
             const game = seasonData.games.find(g => g.id === gameId);
             if (!game) return;
@@ -2283,6 +2336,10 @@
                         ` : ''}
                         
                         <div style="display: flex; gap: 12px; margin-top: 24px;">
+                            <button class="btn" onclick="copyLineupFromGame('${gameId}')" 
+                                    style="flex: 1; padding: 16px; background: var(--diamond-green);">
+                                📋 COPY LINEUP
+                            </button>
                             ${game.status === 'completed' ? `
                                 <button class="btn" onclick="editCompletedGame('${gameId}')" 
                                         style="flex: 1; padding: 16px; background: var(--safe-blue);">
