@@ -1197,6 +1197,28 @@
                         </p>
                     </div>
                     
+                    <!-- Recalculate Stats Section -->
+                    <div style="margin-bottom: 32px; padding: 24px; background: rgba(251, 191, 36, 0.1); border: 2px solid var(--warning-yellow); border-radius: 12px;">
+                        <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--warning-yellow);">
+                            🔄 RECALCULATE SEASON STATS
+                        </h3>
+                        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                            If your roster stats look incorrect (defensive/bench innings), click this to rebuild all stats from completed games. This will:
+                        </p>
+                        <ul style="color: var(--text-secondary); margin-bottom: 20px; padding-left: 24px;">
+                            <li>Reset all defensive & bench inning counts</li>
+                            <li>Recalculate from ONLY completed games</li>
+                            <li>Fix any counting errors from empty lineup slots</li>
+                            <li>Preserve all game data (lineups, scores, etc.)</li>
+                        </ul>
+                        <button class="btn" onclick="recalculateAllSeasonStats()" style="width: 100%; padding: 16px; font-size: 1.1rem; background: var(--warning-yellow); color: #000;">
+                            🔄 FIX ROSTER STATS
+                        </button>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 12px; text-align: center;">
+                            💡 Safe to use - only fixes stats, doesn't delete any games
+                        </p>
+                    </div>
+                    
                     <!-- Clear Data Section -->
                     <div style="padding: 24px; background: rgba(220, 38, 38, 0.1); border: 2px solid var(--alert-red); border-radius: 12px;">
                         <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 1.5px; margin-bottom: 12px; color: var(--alert-red);">
@@ -1938,6 +1960,110 @@
             finishGameAfterSummary(game);
         }
         
+        function reverseCompletedGameStats(game) {
+            // Reverse stats for a completed game (used for dynamic editing)
+            const inningsPlayed = game.inningsPlayed || 6;
+            const unavailableIds = game.unavailablePlayers || [];
+            
+            console.log(`  Reversing old stats: ${inningsPlayed} innings, unavailable: [${unavailableIds.join(', ')}]`);
+            
+            // Reverse playing time stats from lineup
+            Object.entries(game.lineup || {}).forEach(([key, playerId]) => {
+                const [inningIdx, position] = key.split('-');
+                
+                if (!playerId) return;
+                if (parseInt(inningIdx) >= inningsPlayed) return;
+                if (unavailableIds.includes(playerId)) return;
+                
+                // Reverse bench time
+                if (position.startsWith('Bench')) {
+                    if (seasonData.benchTime[playerId]) {
+                        seasonData.benchTime[playerId]--;
+                        if (seasonData.benchTime[playerId] < 0) seasonData.benchTime[playerId] = 0;
+                    }
+                }
+                
+                // Reverse defensive time and position tiers
+                if (position !== 'Bench' && !position.startsWith('Bench')) {
+                    if (seasonData.playingTime[playerId]) {
+                        seasonData.playingTime[playerId].totalInnings--;
+                        if (seasonData.playingTime[playerId].totalInnings < 0) {
+                            seasonData.playingTime[playerId].totalInnings = 0;
+                        }
+                        
+                        if (seasonData.playingTime[playerId].positions[position]) {
+                            seasonData.playingTime[playerId].positions[position]--;
+                            if (seasonData.playingTime[playerId].positions[position] < 0) {
+                                seasonData.playingTime[playerId].positions[position] = 0;
+                            }
+                        }
+                    }
+                    
+                    // Reverse position tiers
+                    if (seasonData.positionTiers[playerId]) {
+                        if (premiumPositions.includes(position)) {
+                            seasonData.positionTiers[playerId].premium--;
+                            if (seasonData.positionTiers[playerId].premium < 0) {
+                                seasonData.positionTiers[playerId].premium = 0;
+                            }
+                        } else if (tier2Positions.includes(position)) {
+                            seasonData.positionTiers[playerId].tier2--;
+                            if (seasonData.positionTiers[playerId].tier2 < 0) {
+                                seasonData.positionTiers[playerId].tier2 = 0;
+                            }
+                        }
+                    }
+                    
+                    // Reverse pitcher rotation count
+                    if (position === 'P' && seasonData.pitcherRotation[playerId]) {
+                        const gameTrackingKey = `${playerId}_game_${game.id}`;
+                        if (seasonData.pitcherRotation[gameTrackingKey]) {
+                            seasonData.pitcherRotation[playerId]--;
+                            if (seasonData.pitcherRotation[playerId] < 0) {
+                                seasonData.pitcherRotation[playerId] = 0;
+                            }
+                            delete seasonData.pitcherRotation[gameTrackingKey];
+                        }
+                    }
+                }
+            });
+            
+            // Reverse pitching data
+            Object.entries(game.pitching || {}).forEach(([playerId, pitches]) => {
+                if (pitches > 0 && seasonData.pitchingLog[playerId]) {
+                    // Remove this game from pitching log
+                    seasonData.pitchingLog[playerId].games = 
+                        seasonData.pitchingLog[playerId].games.filter(g => g.gameId !== game.id);
+                    
+                    // Subtract total pitches
+                    seasonData.pitchingLog[playerId].totalPitches -= pitches;
+                    if (seasonData.pitchingLog[playerId].totalPitches < 0) {
+                        seasonData.pitchingLog[playerId].totalPitches = 0;
+                    }
+                }
+            });
+            
+            // Reverse batting stats from roster
+            if (game.batting) {
+                Object.entries(game.batting).forEach(([playerId, stats]) => {
+                    const player = roster.find(p => p.id === parseInt(playerId));
+                    if (player) {
+                        player.hits -= stats.hits || 0;
+                        player.atBats -= stats.atBats || 0;
+                        if (stats.walks) player.walks -= stats.walks;
+                        
+                        // Prevent negative stats
+                        if (player.hits < 0) player.hits = 0;
+                        if (player.atBats < 0) player.atBats = 0;
+                        if (player.walks < 0) player.walks = 0;
+                    }
+                });
+                localStorage.setItem('cannonBallersRoster', JSON.stringify(roster));
+            }
+            
+            console.log(`  ✓ Old stats reversed`);
+        }
+        
         function finishGameAfterSummary(gameToFinalize) {
             // Find the game in seasonData
             const gameIndex = seasonData.games.findIndex(g => g.id === gameToFinalize.id);
@@ -1946,26 +2072,58 @@
                 return;
             }
             
+            // DYNAMIC EDITING: If game was already completed, reverse old stats first
+            if (gameToFinalize.status === 'completed') {
+                console.log('🔄 Game already completed - reversing old stats before applying new ones (dynamic edit)');
+                reverseCompletedGameStats(gameToFinalize);
+            }
+            
             // Get innings actually played (default to 6 if not set)
             const inningsPlayed = gameToFinalize.inningsPlayed || 6;
+            console.log(`⚾ Finalizing game ${gameToFinalize.id}: ${inningsPlayed} innings played`);
             
             // CLEAR LINEUP DATA FOR INNINGS NOT PLAYED
             if (inningsPlayed < 6) {
+                console.log(`  Clearing lineup data for innings ${inningsPlayed}-5 (not played)`);
                 // Remove lineup entries for innings beyond what was played
                 Object.keys(gameToFinalize.lineup).forEach(key => {
                     const [inningIdx] = key.split('-');
                     if (parseInt(inningIdx) >= inningsPlayed) {
+                        console.log(`  Deleting lineup entry: ${key}`);
                         delete gameToFinalize.lineup[key];
                     }
                 });
             }
             
             // Calculate playing time from lineup (ONLY for innings played)
+            // CRITICAL: Only count stats for players who were actually available
+            const unavailableIds = gameToFinalize.unavailablePlayers || [];
+            console.log(`  Unavailable players: [${unavailableIds.join(', ')}]`);
+            
+            let inningsCountedByPlayer = {};
+            
             Object.entries(gameToFinalize.lineup).forEach(([key, playerId]) => {
                 const [inningIdx, position] = key.split('-');
                 
+                // CRITICAL: Skip if no player assigned to this slot
+                if (!playerId) return;
+                
                 // Double-check we're only processing innings that were played
-                if (parseInt(inningIdx) >= inningsPlayed) return;
+                if (parseInt(inningIdx) >= inningsPlayed) {
+                    console.log(`  ⚠️ WARNING: Found lineup entry ${key} beyond inningsPlayed (${inningsPlayed})`);
+                    return;
+                }
+                
+                // Track innings counted per player for debugging
+                if (!inningsCountedByPlayer[playerId]) {
+                    inningsCountedByPlayer[playerId] = 0;
+                }
+                
+                // SKIP if player was unavailable for this game
+                if (unavailableIds.includes(playerId)) {
+                    console.log(`  Skipping stats for unavailable player ${playerId} in position ${position}`);
+                    return;
+                }
                 
                 // Track bench time
                 if (position.startsWith('Bench')) {
@@ -1973,6 +2131,7 @@
                         seasonData.benchTime[playerId] = 0;
                     }
                     seasonData.benchTime[playerId]++;
+                    inningsCountedByPlayer[playerId]++;
                 }
                 
                 // Track defensive time and position tiers
@@ -1990,6 +2149,7 @@
                     seasonData.playingTime[playerId].totalInnings++;
                     seasonData.playingTime[playerId].positions[position] = 
                         (seasonData.playingTime[playerId].positions[position] || 0) + 1;
+                    inningsCountedByPlayer[playerId]++;
                     
                     // Track position tiers
                     if (!seasonData.positionTiers[playerId]) {
@@ -2014,6 +2174,15 @@
                             seasonData.pitcherRotation[`${playerId}_game_${gameToFinalize.id}`] = true;
                         }
                     }
+                }
+            });
+            
+            // Log summary of innings counted
+            console.log(`  ✅ Innings counted per player:`, inningsCountedByPlayer);
+            Object.entries(inningsCountedByPlayer).forEach(([playerId, count]) => {
+                const player = roster.find(p => p.id === parseInt(playerId));
+                if (player) {
+                    console.log(`    ${player.name}: ${count} innings`);
                 }
             });
             
@@ -2287,6 +2456,10 @@
                         ` : ''}
                         
                         <div style="display: flex; gap: 12px; margin-top: 24px;">
+                            <button class="btn" onclick="copyLineupFromGame('${gameId}')" 
+                                    style="flex: 1; padding: 16px; background: var(--diamond-green);">
+                                📋 COPY LINEUP
+                            </button>
                             ${game.status === 'completed' ? `
                                 <button class="btn" onclick="editCompletedGame('${gameId}')" 
                                         style="flex: 1; padding: 16px; background: var(--safe-blue);">
@@ -2306,6 +2479,54 @@
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
+        }
+        
+        function copyLineupFromGame(gameId) {
+            const sourceGame = seasonData.games.find(g => g.id === gameId);
+            if (!sourceGame) {
+                alert('Error: Source game not found');
+                return;
+            }
+            
+            // Must have a current game selected to copy into
+            if (!currentGame.id) {
+                alert('Please create or select a game first in LINEUP BUILDER before copying a lineup.');
+                return;
+            }
+            
+            if (!confirm(`Copy lineup, batting order, and unavailable players from this game into the current game?\n\nThis will replace your current lineup.`)) {
+                return;
+            }
+            
+            // Copy lineup (all position assignments for all innings)
+            currentGame.lineup = JSON.parse(JSON.stringify(sourceGame.lineup || {}));
+            
+            // Copy batting order
+            currentGame.battingOrder = JSON.parse(JSON.stringify(sourceGame.battingOrder || []));
+            
+            // Copy unavailable players
+            currentGame.unavailablePlayers = JSON.parse(JSON.stringify(sourceGame.unavailablePlayers || []));
+            
+            // Copy innings played setting
+            currentGame.inningsPlayed = sourceGame.inningsPlayed || 6;
+            
+            // Copy locked positions if they exist
+            if (sourceGame.lockedPositions) {
+                currentGame.lockedPositions = JSON.parse(JSON.stringify(sourceGame.lockedPositions));
+            }
+            
+            // DON'T copy pitching, batting stats, or completion status - those are game-specific
+            
+            saveCurrentGame();
+            
+            // Close the view modal
+            document.querySelector('[style*="position: fixed"]')?.remove();
+            
+            alert(`✓ Lineup copied successfully!\n\n• ${Object.keys(currentGame.lineup).length} position assignments\n• ${currentGame.battingOrder.length} players in batting order\n• ${currentGame.unavailablePlayers.length} unavailable players\n• ${currentGame.inningsPlayed} innings\n\nGo to LINEUP BUILDER to review and make any adjustments.`);
+            
+            // Refresh lineup builder to show copied data
+            showSection('lineup');
+            renderLineupBuilder();
         }
         
         function updateInningsPlayed(newInnings) {
@@ -2382,7 +2603,8 @@
                 
                 // IF GAME WAS COMPLETED, REVERSE ALL STATS
                 if (gameToDelete.status === 'completed') {
-                    console.log('✓ Game is completed - reversing stats...');
+                    const inningsPlayed = gameToDelete.inningsPlayed || 6;
+                    console.log(`✓ Game is completed - reversing stats for ${inningsPlayed} innings...`);
                     console.log('Game data:', {
                         lineup: Object.keys(gameToDelete.lineup || {}).length + ' entries',
                         pitching: Object.keys(gameToDelete.pitching || {}).length + ' pitchers',
@@ -2390,13 +2612,38 @@
                     });
                     
                     // Reverse playing time stats from lineup
+                    // CRITICAL: Only reverse stats for players who were actually available
+                    const unavailableIds = gameToDelete.unavailablePlayers || [];
                     const inningsPlayed = gameToDelete.inningsPlayed || 6;
+                    console.log(`  Unavailable players: [${unavailableIds.join(', ')}]`);
+                    console.log(`  Reversing stats for ${inningsPlayed} innings`);
+                    
                     let lineupReversals = 0;
+                    let inningsReversedByPlayer = {};
+                    
                     Object.entries(gameToDelete.lineup || {}).forEach(([key, playerId]) => {
                         const [inningIdx, position] = key.split('-');
                         
+                        // CRITICAL: Skip if no player assigned to this slot
+                        if (!playerId) return;
+                        
                         // Only process innings that were actually played
-                        if (parseInt(inningIdx) >= inningsPlayed) return;
+                        if (parseInt(inningIdx) >= inningsPlayed) {
+                            console.log(`  ⚠️ WARNING: Found lineup entry ${key} beyond inningsPlayed (${inningsPlayed}) - skipping reversal`);
+                            return;
+                        }
+                        
+                        // SKIP if player was unavailable for this game
+                        if (unavailableIds.includes(playerId)) {
+                            console.log(`  Skipping reversal for unavailable player ${playerId} in position ${position}`);
+                            return;
+                        }
+                        
+                        // Track innings reversed per player
+                        if (!inningsReversedByPlayer[playerId]) {
+                            inningsReversedByPlayer[playerId] = 0;
+                        }
+                        inningsReversedByPlayer[playerId]++;
                         
                         lineupReversals++;
                         
@@ -2460,6 +2707,16 @@
                             }
                         }
                     });
+                    
+                    // Log summary of innings reversed
+                    console.log(`  ✅ Innings reversed per player:`, inningsReversedByPlayer);
+                    Object.entries(inningsReversedByPlayer).forEach(([playerId, count]) => {
+                        const player = roster.find(p => p.id === parseInt(playerId));
+                        if (player) {
+                            console.log(`    ${player.name}: ${count} innings reversed`);
+                        }
+                    });
+                    
                     console.log(`Reversed ${lineupReversals} lineup entries`);
                     
                     // Reverse pitching data
@@ -6724,6 +6981,129 @@
             });
             
             return events;
+        }
+        
+        function recalculateAllSeasonStats() {
+            const confirmed = confirm(
+                '🔄 RECALCULATE SEASON STATS\n\n' +
+                'This will:\n' +
+                '• Reset all defensive & bench inning counts to 0\n' +
+                '• Recalculate from ONLY completed games\n' +
+                '• Fix any errors from empty lineup slots\n' +
+                '• Preserve all game data\n\n' +
+                'Continue?'
+            );
+            
+            if (!confirmed) return;
+            
+            try {
+                console.log('=== RECALCULATING ALL SEASON STATS ===');
+                
+                // Step 1: Reset all playing time and bench time stats
+                roster.forEach(player => {
+                    // Reset defensive innings
+                    seasonData.playingTime[player.id] = {
+                        totalInnings: 0,
+                        positions: {}
+                    };
+                    positions.forEach(pos => {
+                        seasonData.playingTime[player.id].positions[pos] = 0;
+                    });
+                    
+                    // Reset bench time
+                    seasonData.benchTime[player.id] = 0;
+                    
+                    // Reset position tiers
+                    seasonData.positionTiers[player.id] = {
+                        premium: 0,
+                        tier2: 0
+                    };
+                    
+                    // Reset pitcher rotation
+                    seasonData.pitcherRotation[player.id] = 0;
+                });
+                
+                // Clear pitcher rotation game tracking
+                Object.keys(seasonData.pitcherRotation).forEach(key => {
+                    if (key.includes('_game_')) {
+                        delete seasonData.pitcherRotation[key];
+                    }
+                });
+                
+                console.log('✓ Reset all stats to 0');
+                
+                // Step 2: Recalculate from all completed games
+                const completedGames = seasonData.games.filter(g => g.status === 'completed');
+                console.log(`Found ${completedGames.length} completed games to process`);
+                
+                completedGames.forEach(game => {
+                    const inningsPlayed = game.inningsPlayed || 6;
+                    const unavailableIds = game.unavailablePlayers || [];
+                    
+                    console.log(`Processing game ${game.id} (${game.opponent}, ${inningsPlayed} innings)`);
+                    
+                    // Process lineup
+                    Object.entries(game.lineup || {}).forEach(([key, playerId]) => {
+                        const [inningIdx, position] = key.split('-');
+                        
+                        // CRITICAL: Skip if no player assigned
+                        if (!playerId) return;
+                        
+                        // Only count innings actually played
+                        if (parseInt(inningIdx) >= inningsPlayed) return;
+                        
+                        // Skip unavailable players
+                        if (unavailableIds.includes(playerId)) return;
+                        
+                        // Count bench time
+                        if (position.startsWith('Bench')) {
+                            seasonData.benchTime[playerId]++;
+                        }
+                        
+                        // Count defensive time
+                        if (position !== 'Bench' && !position.startsWith('Bench')) {
+                            seasonData.playingTime[playerId].totalInnings++;
+                            seasonData.playingTime[playerId].positions[position]++;
+                            
+                            // Count position tiers
+                            if (premiumPositions.includes(position)) {
+                                seasonData.positionTiers[playerId].premium++;
+                            } else if (tier2Positions.includes(position)) {
+                                seasonData.positionTiers[playerId].tier2++;
+                            }
+                            
+                            // Count pitcher games
+                            if (position === 'P') {
+                                const gameTrackingKey = `${playerId}_game_${game.id}`;
+                                if (!seasonData.pitcherRotation[gameTrackingKey]) {
+                                    seasonData.pitcherRotation[playerId]++;
+                                    seasonData.pitcherRotation[gameTrackingKey] = true;
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                console.log('✓ Recalculated all stats');
+                
+                // Step 3: Save
+                saveData();
+                
+                // Step 4: Refresh display
+                renderRoster();
+                
+                alert(
+                    '✅ STATS RECALCULATED!\n\n' +
+                    `Processed ${completedGames.length} completed games.\n\n` +
+                    'Check the ROSTER tab to see corrected stats.'
+                );
+                
+                console.log('=== RECALCULATION COMPLETE ===');
+                
+            } catch (error) {
+                console.error('Error recalculating stats:', error);
+                alert('❌ Error recalculating stats: ' + error.message);
+            }
         }
         
         function exportAllData() {
