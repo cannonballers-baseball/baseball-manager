@@ -1945,16 +1945,8 @@
             // Get innings actually played (default to 6 if not set)
             const inningsPlayed = gameToFinalize.inningsPlayed || 6;
             
-            // CLEAR LINEUP DATA FOR INNINGS NOT PLAYED
-            if (inningsPlayed < 6) {
-                // Remove lineup entries for innings beyond what was played
-                Object.keys(gameToFinalize.lineup).forEach(key => {
-                    const [inningIdx] = key.split('-');
-                    if (parseInt(inningIdx) >= inningsPlayed) {
-                        delete gameToFinalize.lineup[key];
-                    }
-                });
-            }
+            // NOTE: We keep ALL lineup data (even for unplayed innings) so the planning is preserved
+            // Stats are only counted for innings actually played (see check below)
             
             // Calculate playing time from lineup (ONLY for innings played)
             Object.entries(gameToFinalize.lineup).forEach(([key, playerId]) => {
@@ -2255,17 +2247,17 @@
                   }).join('')
                 : '<div style="color: var(--text-secondary);">No batting order saved</div>';
             
-            // Determine which innings to show (only innings played)
+            // Determine which innings to show (show ALL innings, mark which were played)
             const inningsPlayed = game.inningsPlayed || 6;
-            const inningsToShow = innings.slice(0, inningsPlayed);
+            const inningsToShow = innings; // Show all 6 innings
             
-            // Build lineup table (ONLY show innings played)
+            // Build lineup table (show ALL innings, gray out unplayed ones)
             const lineupTableHTML = `
                 <table class="lineup-table" style="margin-top: 16px;">
                     <thead>
                         <tr>
                             <th>POSITION</th>
-                            ${inningsToShow.map(inning => `<th>${inning}</th>`).join('')}
+                            ${inningsToShow.map((inning, idx) => `<th style="${idx >= inningsPlayed ? 'opacity: 0.5; background: rgba(255,255,255,0.05);' : ''}">${inning}${idx >= inningsPlayed ? ' *' : ''}</th>`).join('')}
                         </tr>
                     </thead>
                     <tbody>
@@ -2275,7 +2267,8 @@
                                 ${inningsToShow.map((inning, inningIdx) => {
                                     const playerId = game.lineup[`${inningIdx}-${pos}`];
                                     const player = playerId ? roster.find(p => p.id === playerId) : null;
-                                    return `<td>${player ? player.name.split(' ')[0] : '-'}</td>`;
+                                    const wasPlayed = inningIdx < inningsPlayed;
+                                    return `<td style="${!wasPlayed ? 'opacity: 0.5; background: rgba(255,255,255,0.05);' : ''}">${player ? player.name.split(' ')[0] : '-'}</td>`;
                                 }).join('')}
                             </tr>
                         `).join('')}
@@ -2290,11 +2283,17 @@
                                         if (player) benchPlayers.push(player.name.split(' ')[0]);
                                     }
                                 });
-                                return `<td class="bench-cell">${benchPlayers.length > 0 ? benchPlayers.join(', ') : '-'}</td>`;
+                                const wasPlayed = inningIdx < inningsPlayed;
+                                return `<td class="bench-cell" style="${!wasPlayed ? 'opacity: 0.5; background: rgba(255,255,255,0.05);' : ''}">${benchPlayers.length > 0 ? benchPlayers.join(', ') : '-'}</td>`;
                             }).join('')}
                         </tr>
                     </tbody>
                 </table>
+                ${inningsPlayed < 6 ? `
+                    <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary); font-style: italic;">
+                        * Innings marked with * were planned but not played (game ended after ${inningsPlayed} innings). Planning data is preserved for copying to future games.
+                    </div>
+                ` : ''}
             `;
             
             modal.innerHTML = `
