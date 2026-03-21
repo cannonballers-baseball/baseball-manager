@@ -2224,8 +2224,8 @@
                 // Copy unavailable players
                 currentGame.unavailablePlayers = JSON.parse(JSON.stringify(sourceGame.unavailablePlayers || []));
                 
-                // Copy innings played setting
-                currentGame.inningsPlayed = sourceGame.inningsPlayed || 6;
+                // DON'T copy innings played - new games should default to 6 innings
+                // User can manually adjust if needed for this specific game
                 
                 // Copy locked positions if they exist
                 if (sourceGame.lockedPositions) {
@@ -2239,7 +2239,7 @@
                 // Close the view modal
                 document.querySelector('[style*="position: fixed"]')?.remove();
                 
-                alert('✓ Lineup copied successfully!\n\n• ' + Object.keys(currentGame.lineup).length + ' position assignments\n• ' + currentGame.battingOrder.length + ' players in batting order\n• ' + currentGame.unavailablePlayers.length + ' unavailable players\n• ' + currentGame.inningsPlayed + ' innings\n\nGo to LINEUP BUILDER to review and make any adjustments.');
+                alert('✓ Lineup copied successfully!\n\n• ' + Object.keys(currentGame.lineup).length + ' position assignments\n• ' + currentGame.battingOrder.length + ' players in batting order\n• ' + currentGame.unavailablePlayers.length + ' unavailable players\n\nNew game set to 6 innings (adjust if needed).\n\nGo to LINEUP BUILDER to review and make any adjustments.');
                 
                 // Refresh lineup builder to show copied data
                 showSection('lineup');
@@ -2325,7 +2325,9 @@
                 currentGame.lineup = JSON.parse(JSON.stringify(sourceGame.lineup || {}));
                 currentGame.battingOrder = JSON.parse(JSON.stringify(sourceGame.battingOrder || []));
                 currentGame.unavailablePlayers = JSON.parse(JSON.stringify(sourceGame.unavailablePlayers || []));
-                currentGame.inningsPlayed = sourceGame.inningsPlayed || 6;
+                
+                // DON'T copy innings played - new games should default to 6 innings
+                // User can manually adjust if needed for this specific game
                 
                 if (sourceGame.lockedPositions) {
                     currentGame.lockedPositions = JSON.parse(JSON.stringify(sourceGame.lockedPositions));
@@ -2333,7 +2335,7 @@
                 
                 saveCurrentGame();
                 
-                alert(`✓ Lineup copied from ${gameDate} - ${opponent}!\n\n• ${Object.keys(currentGame.lineup).length} position assignments\n• ${currentGame.battingOrder.length} players in batting order\n• ${currentGame.unavailablePlayers.length} unavailable players\n• ${currentGame.inningsPlayed} innings`);
+                alert(`✓ Lineup copied from ${gameDate} - ${opponent}!\n\n• ${Object.keys(currentGame.lineup).length} position assignments\n• ${currentGame.battingOrder.length} players in batting order\n• ${currentGame.unavailablePlayers.length} unavailable players\n\nNew game set to 6 innings (adjust if needed)`);
                 
                 // Refresh all lineup displays
                 renderLineupBuilder();
@@ -2623,7 +2625,7 @@
             showSection('lineup');
             renderLineupBuilder();
             
-            alert(`✏️ Game reopened for editing (${inningsPlayed} innings). Make your changes and click "FINISH GAME" when done.\n\n✓ Old stats will be removed and replaced with new stats when you finish the game again.`);
+            alert(`✏️ Game reopened for editing (${game.inningsPlayed || 6} innings). Make your changes and click "FINISH GAME" when done.\n\n✓ Old stats will be removed and replaced with new stats when you finish the game again.`);
         }
         
         function deleteGame(gameId) {
