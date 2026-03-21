@@ -1619,6 +1619,9 @@
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
             
+            // Calculate how many bench slots are needed (same as UI rendering)
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
             for (let inningIdx = 0; inningIdx < inningsPlayed; inningIdx++) {
                 const assignedInInning = new Set();
                 
@@ -1628,11 +1631,11 @@
                     if (playerId) assignedInInning.add(playerId);
                 });
                 
-                // Count bench
-                [1, 2, 3].forEach(num => {
+                // Count bench - DYNAMIC based on how many bench slots are actually needed
+                for (let num = 1; num <= benchSlotsNeeded; num++) {
                     const playerId = currentGame.lineup[`${inningIdx}-Bench${num}`];
                     if (playerId) assignedInInning.add(playerId);
-                });
+                }
                 
                 // Expected: all available players should be assigned (either on field or bench)
                 const expected = availableCount;
@@ -1832,12 +1835,15 @@
                                         <div>
                                             <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Strikes</label>
                                             <input type="number" id="strikes_${pitcher.id}" min="0" value="${existingStrikes}" 
+                                                   oninput="autoCalculateBalls(${pitcher.id}, ${pitcher.totalPitches})"
                                                    style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                            <div style="font-size: 0.7rem; color: var(--safe-blue); margin-top: 2px;">💡 Auto-calculates balls</div>
                                         </div>
                                         <div>
-                                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Balls</label>
+                                            <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Balls <span style="color: var(--safe-blue);">(auto)</span></label>
                                             <input type="number" id="balls_${pitcher.id}" min="0" value="${existingBalls}" 
                                                    style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Total (${pitcher.totalPitches}) - Strikes</div>
                                         </div>
                                         <div>
                                             <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Strikeouts (K)</label>
@@ -1880,6 +1886,22 @@
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
+        }
+        
+        function autoCalculateBalls(pitcherId, totalPitches) {
+            // Get strikes input value
+            const strikesInput = document.getElementById(`strikes_${pitcherId}`);
+            const ballsInput = document.getElementById(`balls_${pitcherId}`);
+            
+            if (!strikesInput || !ballsInput) return;
+            
+            const strikes = parseInt(strikesInput.value) || 0;
+            
+            // Calculate: Balls = Total Pitches - Strikes
+            const balls = Math.max(0, totalPitches - strikes);
+            
+            // Update balls input
+            ballsInput.value = balls;
         }
         
         function completeFinalizeGame(gameId) {
@@ -1947,12 +1969,108 @@
             finishGameAfterSummary(game);
         }
         
+        function removeGameStatsFromSeason(game) {
+            // This function removes all stats from a specific game from season totals
+            // Used when editing a completed game so we don't double-count stats
+            
+            const inningsPlayed = game.inningsPlayed || 6;
+            
+            console.log(`Removing stats for game ${game.id} (${inningsPlayed} innings)`);
+            
+            // Remove bench time and playing time
+            Object.entries(game.lineup || {}).forEach(([key, playerId]) => {
+                const [inningIdx, position] = key.split('-');
+                
+                // Only process innings that were played
+                if (parseInt(inningIdx) >= inningsPlayed) return;
+                
+                // Remove bench time
+                if (position.startsWith('Bench')) {
+                    if (seasonData.benchTime[playerId]) {
+                        seasonData.benchTime[playerId] = Math.max(0, seasonData.benchTime[playerId] - 1);
+                    }
+                }
+                
+                // Remove defensive time and position tiers
+                if (position !== 'Bench' && !position.startsWith('Bench')) {
+                    if (seasonData.playingTime[playerId]) {
+                        seasonData.playingTime[playerId].totalInnings = Math.max(0, seasonData.playingTime[playerId].totalInnings - 1);
+                        if (seasonData.playingTime[playerId].positions[position]) {
+                            seasonData.playingTime[playerId].positions[position] = Math.max(0, seasonData.playingTime[playerId].positions[position] - 1);
+                        }
+                    }
+                    
+                    // Remove position tier counts
+                    if (seasonData.positionTiers[playerId]) {
+                        if (premiumPositions.includes(position)) {
+                            seasonData.positionTiers[playerId].premium = Math.max(0, seasonData.positionTiers[playerId].premium - 1);
+                        } else if (tier2Positions.includes(position)) {
+                            seasonData.positionTiers[playerId].tier2 = Math.max(0, seasonData.positionTiers[playerId].tier2 - 1);
+                        }
+                    }
+                }
+            });
+            
+            // Remove pitcher rotation tracking
+            // Note: This is tricky because we track "games pitched" not innings
+            // We need to check if this game had the player pitching
+            Object.entries(game.lineup || {}).forEach(([key, playerId]) => {
+                const [inningIdx, position] = key.split('-');
+                if (parseInt(inningIdx) >= inningsPlayed) return;
+                
+                if (position === 'P') {
+                    const trackingKey = `${playerId}_game_${game.id}`;
+                    if (seasonData.pitcherRotation[trackingKey]) {
+                        // Remove the game tracking
+                        delete seasonData.pitcherRotation[trackingKey];
+                        // Decrement pitcher count
+                        if (seasonData.pitcherRotation[playerId]) {
+                            seasonData.pitcherRotation[playerId] = Math.max(0, seasonData.pitcherRotation[playerId] - 1);
+                        }
+                    }
+                }
+            });
+            
+            // Remove pitching stats
+            Object.entries(game.pitchingDetails || {}).forEach(([playerId, details]) => {
+                const pid = parseInt(playerId);
+                if (seasonData.pitchingStats[pid]) {
+                    seasonData.pitchingStats[pid].inningsPitched = Math.max(0, (seasonData.pitchingStats[pid].inningsPitched || 0) - (details.inningsPitched || 0));
+                    seasonData.pitchingStats[pid].hitsAllowed = Math.max(0, (seasonData.pitchingStats[pid].hitsAllowed || 0) - (details.hitsAllowed || 0));
+                    seasonData.pitchingStats[pid].strikes = Math.max(0, (seasonData.pitchingStats[pid].strikes || 0) - (details.strikes || 0));
+                    seasonData.pitchingStats[pid].balls = Math.max(0, (seasonData.pitchingStats[pid].balls || 0) - (details.balls || 0));
+                    seasonData.pitchingStats[pid].strikeouts = Math.max(0, (seasonData.pitchingStats[pid].strikeouts || 0) - (details.strikeouts || 0));
+                    seasonData.pitchingStats[pid].walks = Math.max(0, (seasonData.pitchingStats[pid].walks || 0) - (details.walks || 0));
+                    seasonData.pitchingStats[pid].hitBatters = Math.max(0, (seasonData.pitchingStats[pid].hitBatters || 0) - (details.hitBatters || 0));
+                }
+            });
+            
+            // Remove batting stats
+            Object.entries(game.batting || {}).forEach(([playerId, stats]) => {
+                const pid = parseInt(playerId);
+                if (seasonData.battingStats[pid]) {
+                    seasonData.battingStats[pid].hits = Math.max(0, (seasonData.battingStats[pid].hits || 0) - (stats.hits || 0));
+                    seasonData.battingStats[pid].atBats = Math.max(0, (seasonData.battingStats[pid].atBats || 0) - (stats.atBats || 0));
+                    seasonData.battingStats[pid].walks = Math.max(0, (seasonData.battingStats[pid].walks || 0) - (stats.walks || 0));
+                }
+            });
+            
+            console.log('Old stats removed successfully');
+        }
+        
         function finishGameAfterSummary(gameToFinalize) {
             // Find the game in seasonData
             const gameIndex = seasonData.games.findIndex(g => g.id === gameToFinalize.id);
             if (gameIndex === -1) {
                 alert('Error: Game not found in season data');
                 return;
+            }
+            
+            // IMPORTANT: If this game was already completed, remove its old stats first
+            const wasAlreadyCompleted = seasonData.games[gameIndex].status === 'completed';
+            if (wasAlreadyCompleted) {
+                console.log('Game was already completed - removing old stats before adding new ones');
+                removeGameStatsFromSeason(seasonData.games[gameIndex]);
             }
             
             // Get innings actually played (default to 6 if not set)
@@ -2289,11 +2407,14 @@
                             <td style="font-weight: 700; background: rgba(220,38,38,0.1);">BENCH</td>
                             ${inningsToShow.map((inning, inningIdx) => {
                                 const benchPlayers = [];
-                                [1, 2, 3].forEach(num => {
-                                    const playerId = game.lineup[`${inningIdx}-Bench${num}`];
-                                    if (playerId) {
-                                        const player = roster.find(p => p.id === playerId);
-                                        if (player) benchPlayers.push(player.name.split(' ')[0]);
+                                // Find all bench assignments for this inning (dynamically)
+                                Object.keys(game.lineup).forEach(key => {
+                                    if (key.startsWith(`${inningIdx}-Bench`)) {
+                                        const playerId = game.lineup[key];
+                                        if (playerId) {
+                                            const player = roster.find(p => p.id === playerId);
+                                            if (player) benchPlayers.push(player.name.split(' ')[0]);
+                                        }
                                     }
                                 });
                                 const wasPlayed = inningIdx < inningsPlayed;
@@ -2491,15 +2612,6 @@
             // Close the view modal
             document.querySelectorAll('[style*="position: fixed"]').forEach(el => el.remove());
             
-            // IMPORTANT: Clear lineup data for innings beyond what was played
-            const inningsPlayed = game.inningsPlayed || 6;
-            Object.keys(game.lineup).forEach(key => {
-                const [inningIdx] = key.split('-');
-                if (parseInt(inningIdx) >= inningsPlayed) {
-                    delete game.lineup[key];
-                }
-            });
-            
             // Reopen the game for editing
             game.status = 'in-progress';
             currentGame = { ...game };
@@ -2511,7 +2623,7 @@
             showSection('lineup');
             renderLineupBuilder();
             
-            alert(`✏️ Game reopened for editing (${inningsPlayed} innings). Make your changes and click "FINISH GAME" when done.\n\n⚠️ Note: Old stats will remain in season totals. Only edit for minor corrections.`);
+            alert(`✏️ Game reopened for editing (${inningsPlayed} innings). Make your changes and click "FINISH GAME" when done.\n\n✓ Old stats will be removed and replaced with new stats when you finish the game again.`);
         }
         
         function deleteGame(gameId) {
@@ -3952,12 +4064,16 @@
             // Visual diamond
             const container = document.getElementById('visualLineup');
             
-            // Get bench players for current inning
+            // Get bench players for current inning (dynamic based on roster size)
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
             const benchPlayerIds = [];
-            [1, 2, 3].forEach(num => {
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchPlayerId = currentGame.lineup[`${currentInning}-Bench${num}`];
                 if (benchPlayerId) benchPlayerIds.push(benchPlayerId);
-            });
+            }
             
             const benchPlayers = benchPlayerIds.map(id => roster.find(p => p.id === id)).filter(p => p);
             
@@ -4125,6 +4241,7 @@
         function getSuggestedBenchPlayer(inningIdx, benchNum) {
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
+            const benchSlotsNeeded = Math.max(0, availablePlayers.length - 9);
             
             // Get already assigned players in this inning
             const assignedInInning = [];
@@ -4132,12 +4249,13 @@
                 const playerId = currentGame.lineup[`${inningIdx}-${pos}`];
                 if (playerId) assignedInInning.push(playerId);
             });
-            [1, 2, 3].forEach(num => {
+            // Check all bench slots except the current one
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 if (num !== benchNum) {
                     const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${num}`];
                     if (benchPlayerId) assignedInInning.push(benchPlayerId);
                 }
-            });
+            }
             
             // Get unassigned players
             const unassignedPlayers = availablePlayers.filter(p => !assignedInInning.includes(p.id));
@@ -4152,12 +4270,12 @@
             
             // Count how many bench innings each unassigned player already has THIS GAME
             innings.forEach((inning, idx) => {
-                [1, 2, 3].forEach(num => {
+                for (let num = 1; num <= benchSlotsNeeded; num++) {
                     const playerId = currentGame.lineup[`${idx}-Bench${num}`];
                     if (playerId && currentGameBenchCount[playerId] !== undefined) {
                         currentGameBenchCount[playerId]++;
                     }
-                });
+                }
             });
             
             // Sort by: 1) fewest bench innings this game, 2) fewest season bench innings
@@ -4244,6 +4362,7 @@
             
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
+            const benchSlotsNeeded = Math.max(0, availablePlayers.length - 9);
             
             // Get all assigned players in this inning (defense + bench)
             const assignedInInning = [];
@@ -4252,13 +4371,13 @@
                 if (playerId) assignedInInning.push(playerId);
             });
             
-            // Add other bench assignments
-            [1, 2, 3].forEach(num => {
+            // Add other bench assignments - check all bench slots dynamically
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 if (num !== benchNum) {
                     const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${num}`];
                     if (benchPlayerId) assignedInInning.push(benchPlayerId);
                 }
-            });
+            }
             
             // Only show unassigned players
             const unassignedPlayers = availablePlayers.filter(p => !assignedInInning.includes(p.id));
@@ -4384,8 +4503,13 @@
                                         <td class="player-name-col">${player.name}</td>
                                         ${inningsToShow.map((inning, inningIdx) => {
                                             // Find this player's position in this inning
-                                            let position = 'BENCH';
+                                            let position = null;
                                             let posKey = null;
+                                            
+                                            // Calculate bench slots needed
+                                            const unavailableIds = currentGame.unavailablePlayers || [];
+                                            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+                                            const benchSlotsNeeded = Math.max(0, availableCount - 9);
                                             
                                             positions.forEach(pos => {
                                                 const key = `${inningIdx}-${pos}`;
@@ -4395,15 +4519,19 @@
                                                 }
                                             });
                                             
-                                            // Check bench slots
-                                            if (position === 'BENCH') {
-                                                [1, 2, 3].forEach(num => {
+                                            // Check bench slots dynamically
+                                            if (!position) {
+                                                for (let num = 1; num <= benchSlotsNeeded; num++) {
                                                     const benchKey = `${inningIdx}-Bench${num}`;
                                                     if (currentGame.lineup[benchKey] === player.id) {
                                                         position = 'BENCH';
+                                                        break;
                                                     }
-                                                });
+                                                }
                                             }
+                                            
+                                            // If still not found, player is not assigned
+                                            if (!position) position = '-';
                                             
                                             const isBench = position === 'BENCH';
                                             
@@ -4440,6 +4568,11 @@
             const player = roster.find(p => p.id === playerId);
             if (!player) return;
             
+            // Calculate bench slots needed
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
             // Find current position
             let currentPos = null;
             let currentKey = null;
@@ -4453,15 +4586,15 @@
                 }
             });
             
-            // Check bench slots
+            // Check bench slots dynamically
             if (!currentPos) {
-                [1, 2, 3].forEach(num => {
+                for (let num = 1; num <= benchSlotsNeeded; num++) {
                     const benchKey = `${inningIdx}-Bench${num}`;
                     if (currentGame.lineup[benchKey] === playerId) {
                         currentPos = 'Bench';
                         currentKey = benchKey;
                     }
-                });
+                }
             }
             
             // Get available positions (filter out restricted positions)
@@ -4581,6 +4714,11 @@
                 currentGame.lockedPositions = {};
             }
             
+            // Calculate bench slots needed
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
             // Find and remove player from current position
             let currentKey = null;
             positions.forEach(pos => {
@@ -4591,12 +4729,13 @@
                     delete currentGame.lockedPositions[key];
                 }
             });
-            [1, 2, 3].forEach(num => {
+            // Check all bench slots dynamically
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchKey = `${inningIdx}-Bench${num}`;
                 if (currentGame.lineup[benchKey] === playerId) {
                     currentKey = benchKey;
                 }
-            });
+            }
             
             if (currentKey) {
                 delete currentGame.lineup[currentKey];
@@ -4605,7 +4744,7 @@
             // Assign to new position
             if (newPos === 'Bench') {
                 // Find first available bench slot
-                for (let num = 1; num <= 3; num++) {
+                for (let num = 1; num <= benchSlotsNeeded; num++) {
                     const benchKey = `${inningIdx}-Bench${num}`;
                     if (!currentGame.lineup[benchKey]) {
                         currentGame.lineup[benchKey] = playerId;
@@ -4623,8 +4762,8 @@
                     if (currentKey && !currentKey.includes('Bench')) {
                         currentGame.lineup[currentKey] = otherPlayerId;
                     } else {
-                        // Move to bench
-                        for (let num = 1; num <= 3; num++) {
+                        // Move to bench - use dynamic bench slots
+                        for (let num = 1; num <= benchSlotsNeeded; num++) {
                             const benchKey = `${inningIdx}-Bench${num}`;
                             if (!currentGame.lineup[benchKey]) {
                                 currentGame.lineup[benchKey] = otherPlayerId;
@@ -4647,6 +4786,10 @@
         }
         
         function clearPlayerPosition(playerId, inningIdx) {
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
             // Remove player from all positions in this inning
             positions.forEach(pos => {
                 const key = `${inningIdx}-${pos}`;
@@ -4654,12 +4797,13 @@
                     delete currentGame.lineup[key];
                 }
             });
-            [1, 2, 3].forEach(num => {
+            // Check all bench slots dynamically
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchKey = `${inningIdx}-Bench${num}`;
                 if (currentGame.lineup[benchKey] === playerId) {
                     delete currentGame.lineup[benchKey];
                 }
-            });
+            }
             
             saveCurrentGame();
             closePositionSelector();
@@ -4682,6 +4826,7 @@
             
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
+            const benchSlotsNeeded = Math.max(0, availablePlayers.length - 9);
             
             console.log('Available players:', availablePlayers.length);
             
@@ -4694,12 +4839,12 @@
                 }
             });
             
-            // Track bench players separately (we'll show them but allow selection)
+            // Track bench players separately (we'll show them but allow selection) - use dynamic bench slots
             const benchPlayerIds = [];
-            [1, 2, 3].forEach(num => {
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${num}`];
                 if (benchPlayerId) benchPlayerIds.push(benchPlayerId);
-            });
+            }
             
             // Build list of who has pitched in this game (across all innings)
             const playersWhoPitched = new Set();
@@ -4866,14 +5011,20 @@
                 currentGame.lockedPositions = {};
             }
             
-            // Check if this player is currently on the bench
+            // Calculate bench slots needed
+            const unavailableIds = currentGame.unavailablePlayers || [];
+            const availableCount = roster.filter(p => !unavailableIds.includes(p.id)).length;
+            const benchSlotsNeeded = Math.max(0, availableCount - 9);
+            
+            // Check if this player is currently on the bench - check all bench slots dynamically
             let benchSlotToClear = null;
-            [1, 2, 3].forEach(num => {
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchKey = `${inningIdx}-Bench${num}`;
                 if (currentGame.lineup[benchKey] === playerId) {
                     benchSlotToClear = benchKey;
+                    break;
                 }
-            });
+            }
             
             // If we're replacing someone at this position, move them to bench
             const currentPlayerAtPosition = currentGame.lineup[key];
@@ -4881,8 +5032,8 @@
                 // Find an empty bench slot or the one we're freeing up
                 let emptyBenchSlot = benchSlotToClear;
                 if (!emptyBenchSlot) {
-                    // Find first empty bench slot
-                    for (let num = 1; num <= 3; num++) {
+                    // Find first empty bench slot - use dynamic bench slots
+                    for (let num = 1; num <= benchSlotsNeeded; num++) {
                         const benchKey = `${inningIdx}-Bench${num}`;
                         if (!currentGame.lineup[benchKey]) {
                             emptyBenchSlot = benchKey;
@@ -4971,6 +5122,7 @@
         function getSuggestedPlayerForPosition(inningIdx, position) {
             const unavailableIds = currentGame.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
+            const benchSlotsNeeded = Math.max(0, availablePlayers.length - 9);
             
             // Get already assigned players in this inning
             const assignedInInning = [];
@@ -4978,10 +5130,11 @@
                 const playerId = currentGame.lineup[`${inningIdx}-${pos}`];
                 if (playerId) assignedInInning.push(playerId);
             });
-            [1, 2, 3].forEach(num => {
+            // Check all bench slots dynamically
+            for (let num = 1; num <= benchSlotsNeeded; num++) {
                 const benchPlayerId = currentGame.lineup[`${inningIdx}-Bench${num}`];
                 if (benchPlayerId) assignedInInning.push(benchPlayerId);
-            });
+            }
             
             // Get unassigned players
             const unassignedPlayers = availablePlayers.filter(p => {
