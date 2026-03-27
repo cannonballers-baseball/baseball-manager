@@ -1068,16 +1068,6 @@
                     </div>
                 </div>
                 
-                <!-- Pitcher Stats Toggle -->
-                <div style="margin-bottom: 20px;">
-                    <button id="togglePitcherStats" class="btn btn-secondary" onclick="toggleLineupPitcherStats()" style="width: 100%; padding: 12px; font-size: 1rem;">
-                        📊 Show Pitcher Stats
-                    </button>
-                    <div id="lineupPitcherStatsContainer" style="display: none; margin-top: 16px; padding: 20px; background: rgba(26, 95, 63, 0.05); border: 2px solid var(--border-color); border-radius: 12px;">
-                        <div id="lineupPitcherStatsTable"></div>
-                    </div>
-                </div>
-                
                 <div id="lineupBuilderContent">
                     <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
                         <div style="font-size: 3rem; margin-bottom: 16px;">⚾</div>
@@ -1305,7 +1295,7 @@
             
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">PITCHING ANALYSIS</h2>
+                    <h2 class="card-title" style="font-size: 1.6rem;">⚾ PITCHING ANALYSIS</h2>
                     <div style="display: flex; gap: 8px;">
                         <button id="pitchingViewGameLog" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;">Game Log</button>
                         <button id="pitchingViewSummary" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.9rem;">Summary</button>
@@ -3465,12 +3455,22 @@
                 </div>
                 
                 <!-- Visual Lineup Display -->
-                <div style="margin-bottom: 32px;">
+                <div style="margin-bottom: 32px; clear: both;">
                     <h3 style="font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 1.5px; margin-bottom: 16px; color: var(--diamond-green);">
                         VISUAL LINEUP
                     </h3>
                     <div id="inningSelector" style="margin-bottom: 16px;"></div>
-                    <div id="visualLineup"></div>
+                    <div id="visualLineup" style="clear: both;"></div>
+                </div>
+                
+                <!-- Pitcher Stats Toggle -->
+                <div style="margin-bottom: 32px; clear: both; margin-top: 40px;">
+                    <button id="togglePitcherStats" class="btn btn-secondary" onclick="toggleLineupPitcherStats()" style="width: 100%; padding: 12px; font-size: 1rem;">
+                        📊 Show Pitcher Stats
+                    </button>
+                    <div id="lineupPitcherStatsContainer" style="display: none; margin-top: 16px; padding: 20px; background: rgba(26, 95, 63, 0.05); border: 2px solid var(--border-color); border-radius: 12px;">
+                        <div id="lineupPitcherStatsTable"></div>
+                    </div>
                 </div>
                 
                 <!-- Position Assignments -->
@@ -3490,7 +3490,7 @@
                         <button class="btn btn-secondary" onclick="toggleLineupView()">
                             <span id="viewToggleText">Switch to Player View</span>
                         </button>
-                        <button class="btn btn-danger" onclick="(function(e){e.stopPropagation(); clearAllPositions();})(event)" style="margin-left: auto;">
+                        <button class="btn btn-danger" onclick="event.stopPropagation(); clearAllPositions();" style="margin-left: auto;">
                             🗑️ Clear All Positions
                         </button>
                     </div>
@@ -3650,6 +3650,9 @@
         }
         
         function switchToGame(gameId) {
+            // Reset pitcher stats visibility
+            lineupPitcherStatsVisible = false;
+            
             if (!gameId) {
                 currentGame = {
                     id: null,
@@ -3997,7 +4000,6 @@
         }
         
         function clearAllPositions() {
-            console.log('clearAllPositions called');
             try {
                 if (!currentGame.id) {
                     alert('No active game to clear positions for');
@@ -4005,11 +4007,9 @@
                 }
                 
                 if (!confirm('Clear ALL position assignments for this entire game? This cannot be undone.')) {
-                    console.log('User cancelled clear all positions');
                     return;
                 }
                 
-                console.log('Clearing all positions...');
                 // Clear all lineup entries (positions and bench)
                 currentGame.lineup = {};
                 
@@ -4017,7 +4017,6 @@
                 renderLineupBuilder();
                 
                 alert('✓ All positions cleared successfully');
-                console.log('All positions cleared successfully');
             } catch (error) {
                 console.error('Error in clearAllPositions:', error);
                 alert('Error clearing positions: ' + error.message);
@@ -4125,14 +4124,14 @@
                             `;
                         }).join('')}
                     </div>
-                    <div class="bench-area">
-                        <div class="bench-label">BENCH (${benchPlayers.length}/3)</div>
-                        <div class="bench-players">
-                            ${benchPlayers.length > 0 
-                                ? benchPlayers.map(p => `<div class="bench-player">${p.name.split(' ')[0]}</div>`).join('')
-                                : '<div style="color: var(--text-secondary); font-size: 0.85rem;">No bench assignments</div>'
-                            }
-                        </div>
+                </div>
+                <div class="bench-area">
+                    <div class="bench-label">BENCH (${benchPlayers.length}/3)</div>
+                    <div class="bench-players">
+                        ${benchPlayers.length > 0 
+                            ? benchPlayers.map(p => `<div class="bench-player">${p.name.split(' ')[0]}</div>`).join('')
+                            : '<div style="color: var(--text-secondary); font-size: 0.85rem;">No bench assignments</div>'
+                        }
                     </div>
                 </div>
             `;
