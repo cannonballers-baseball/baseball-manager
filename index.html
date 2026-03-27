@@ -1068,6 +1068,16 @@
                     </div>
                 </div>
                 
+                <!-- Pitcher Stats Toggle -->
+                <div style="margin-bottom: 20px;">
+                    <button id="togglePitcherStats" class="btn btn-secondary" onclick="toggleLineupPitcherStats()" style="width: 100%; padding: 12px; font-size: 1rem;">
+                        📊 Show Pitcher Stats
+                    </button>
+                    <div id="lineupPitcherStatsContainer" style="display: none; margin-top: 16px; padding: 20px; background: rgba(26, 95, 63, 0.05); border: 2px solid var(--border-color); border-radius: 12px;">
+                        <div id="lineupPitcherStatsTable"></div>
+                    </div>
+                </div>
+                
                 <div id="lineupBuilderContent">
                     <div style="text-align: center; padding: 60px 20px; color: var(--text-secondary);">
                         <div style="font-size: 3rem; margin-bottom: 16px;">⚾</div>
@@ -6299,7 +6309,7 @@
             
             // Helper function to get strike percentage color
             function getStrikeColor(strikePercent) {
-                if (strikePercent >= 50) return 'var(--safe-green)';
+                if (strikePercent > 50) return 'var(--safe-green)';
                 if (strikePercent >= 40) return '#f59e0b'; // yellow
                 return 'var(--warning-red)';
             }
@@ -6515,6 +6525,169 @@
             
             // Set initial button states
             updateButtonStyles();
+        }
+        
+        // Lineup Builder Pitcher Stats
+        let lineupPitcherStatsVisible = false;
+        
+        function toggleLineupPitcherStats() {
+            const container = document.getElementById('lineupPitcherStatsContainer');
+            const button = document.getElementById('togglePitcherStats');
+            
+            if (!container || !button) return;
+            
+            lineupPitcherStatsVisible = !lineupPitcherStatsVisible;
+            
+            if (lineupPitcherStatsVisible) {
+                container.style.display = 'block';
+                button.textContent = '📊 Hide Pitcher Stats';
+                button.className = 'btn btn-primary';
+                renderLineupPitcherStats();
+            } else {
+                container.style.display = 'none';
+                button.textContent = '📊 Show Pitcher Stats';
+                button.className = 'btn btn-secondary';
+            }
+        }
+        
+        function renderLineupPitcherStats() {
+            const tableDiv = document.getElementById('lineupPitcherStatsTable');
+            if (!tableDiv) return;
+            
+            // Reload data
+            roster = JSON.parse(localStorage.getItem('cannonBallersRoster')) || [];
+            seasonData = JSON.parse(localStorage.getItem('cannonBallersData')) || {
+                games: [],
+                pitchingLog: {},
+                playingTime: {},
+                benchTime: {},
+                positionTiers: {},
+                pitcherRotation: {},
+                currentGameId: null
+            };
+            
+            const completedGames = seasonData.games.filter(g => g.status === 'completed');
+            
+            if (completedGames.length === 0) {
+                tableDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No completed games yet - stats will appear after your first game</div>';
+                return;
+            }
+            
+            // Calculate current date for days rest
+            const today = new Date();
+            
+            // Calculate pitcher stats
+            const pitcherStats = {};
+            
+            completedGames.forEach(game => {
+                if (!game.pitchingDetails) return;
+                
+                Object.entries(game.pitchingDetails).forEach(([playerId, details]) => {
+                    const totalPitches = (details.strikes || 0) + (details.balls || 0);
+                    if (totalPitches === 0) return;
+                    
+                    const playerIdInt = parseInt(playerId);
+                    
+                    if (!pitcherStats[playerIdInt]) {
+                        const player = roster.find(p => p.id === playerIdInt);
+                        pitcherStats[playerIdInt] = {
+                            name: player ? player.name : 'Unknown',
+                            gamesPitched: 0,
+                            totalPitches: 0,
+                            totalStrikes: 0,
+                            totalBalls: 0,
+                            lastGameDate: null
+                        };
+                    }
+                    
+                    pitcherStats[playerIdInt].gamesPitched++;
+                    pitcherStats[playerIdInt].totalPitches += totalPitches;
+                    pitcherStats[playerIdInt].totalStrikes += (details.strikes || 0);
+                    pitcherStats[playerIdInt].totalBalls += (details.balls || 0);
+                    
+                    // Track most recent game date
+                    if (!pitcherStats[playerIdInt].lastGameDate || game.date > pitcherStats[playerIdInt].lastGameDate) {
+                        pitcherStats[playerIdInt].lastGameDate = game.date;
+                    }
+                });
+            });
+            
+            // Convert to array and calculate percentages
+            const pitchers = Object.values(pitcherStats).map(stats => {
+                const strikePercent = stats.totalPitches > 0 ? (stats.totalStrikes / stats.totalPitches) * 100 : 0;
+                
+                // Calculate days rest
+                let daysRest = '-';
+                if (stats.lastGameDate) {
+                    const lastGame = new Date(stats.lastGameDate);
+                    const diffTime = Math.abs(today - lastGame);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    daysRest = diffDays;
+                }
+                
+                // Determine color
+                let color;
+                if (strikePercent > 50) {
+                    color = 'var(--safe-green)';
+                } else if (strikePercent >= 40) {
+                    color = '#f59e0b';
+                } else {
+                    color = 'var(--warning-red)';
+                }
+                
+                return {
+                    ...stats,
+                    strikePercent: strikePercent.toFixed(1),
+                    daysRest: daysRest,
+                    color: color
+                };
+            });
+            
+            // Sort by strike percentage (best first)
+            pitchers.sort((a, b) => parseFloat(b.strikePercent) - parseFloat(a.strikePercent));
+            
+            if (pitchers.length === 0) {
+                tableDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No pitching data recorded yet</div>';
+                return;
+            }
+            
+            // Render table
+            tableDiv.innerHTML = `
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border);">
+                                <th style="padding: 10px; text-align: left; font-weight: 600; font-size: 0.9rem;">Pitcher</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Strike %</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Games</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Last Game</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Days Rest</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Total Pitches</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pitchers.map(pitcher => `
+                                <tr style="border-bottom: 1px solid var(--border);">
+                                    <td style="padding: 10px; font-weight: 500;">${pitcher.name}</td>
+                                    <td style="padding: 10px; text-align: center;">
+                                        <span style="color: ${pitcher.color}; font-weight: 600;">${pitcher.strikePercent}%</span>
+                                    </td>
+                                    <td style="padding: 10px; text-align: center;">${pitcher.gamesPitched}</td>
+                                    <td style="padding: 10px; text-align: center; font-size: 0.9rem;">${pitcher.lastGameDate || '-'}</td>
+                                    <td style="padding: 10px; text-align: center;">${pitcher.daysRest}</td>
+                                    <td style="padding: 10px; text-align: center;">${pitcher.totalPitches}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 12px; padding: 10px; background: rgba(26, 95, 63, 0.1); border-radius: 6px; font-size: 0.85rem; color: var(--text-secondary);">
+                    💡 <strong>Quick Reference:</strong> 
+                    <span style="color: var(--safe-green); font-weight: 600;">Green (>50%)</span> = Strong control | 
+                    <span style="color: #f59e0b; font-weight: 600;">Yellow (40-50%)</span> = Developing | 
+                    <span style="color: var(--warning-red); font-weight: 600;">Red (<40%)</span> = Needs work
+                </div>
+            `;
         }
         
         // Save Data
