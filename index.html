@@ -1292,6 +1292,17 @@
                 </div>
                 <div id="playingTimeBreakdown"></div>
             </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">PITCHING ANALYSIS</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="pitchingViewGameLog" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;">Game Log</button>
+                        <button id="pitchingViewSummary" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.9rem;">Summary</button>
+                    </div>
+                </div>
+                <div id="pitchingAnalysisContainer"></div>
+            </div>
         </div>
     </div>
 
@@ -1600,6 +1611,8 @@
             
             if (sectionId === 'stats') {
                 renderSeasonStats();
+                renderPitchingAnalysis();
+                setupPitchingAnalysisButtons();
             } else if (sectionId === 'pitching') {
                 renderPitchCounter();
             } else if (sectionId === 'roster') {
@@ -2829,6 +2842,8 @@
                 const statsSection = document.getElementById('stats');
                 if (statsSection && statsSection.classList.contains('active')) {
                     renderSeasonStats();
+                    renderPitchingAnalysis();
+                    setupPitchingAnalysisButtons();
                 }
                 
                 const statsMsg = gameToDelete.status === 'completed' ? ' (stats reversed)' : '';
@@ -6249,6 +6264,257 @@
             
             console.log('Playing time breakdown updated');
             console.log('=== renderSeasonStats complete ===');
+        }
+        
+        // Pitching Analysis
+        let pitchingAnalysisView = 'gameLog'; // 'gameLog' or 'summary'
+        
+        function renderPitchingAnalysis() {
+            console.log('=== renderPitchingAnalysis called ===');
+            
+            const container = document.getElementById('pitchingAnalysisContainer');
+            if (!container) {
+                console.error('ERROR: pitchingAnalysisContainer not found!');
+                return;
+            }
+            
+            // Reload data
+            roster = JSON.parse(localStorage.getItem('cannonBallersRoster')) || [];
+            seasonData = JSON.parse(localStorage.getItem('cannonBallersData')) || {
+                games: [],
+                pitchingLog: {},
+                playingTime: {},
+                benchTime: {},
+                positionTiers: {},
+                pitcherRotation: {},
+                currentGameId: null
+            };
+            
+            const completedGames = seasonData.games.filter(g => g.status === 'completed');
+            
+            if (completedGames.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No completed games yet</div>';
+                return;
+            }
+            
+            // Helper function to get strike percentage color
+            function getStrikeColor(strikePercent) {
+                if (strikePercent >= 50) return 'var(--safe-green)';
+                if (strikePercent >= 40) return '#f59e0b'; // yellow
+                return 'var(--warning-red)';
+            }
+            
+            // Helper function to format strike percentage with color
+            function formatStrikePercent(strikes, totalPitches) {
+                if (totalPitches === 0) return '<span style="color: var(--text-secondary);">-</span>';
+                const percent = ((strikes / totalPitches) * 100).toFixed(1);
+                const color = getStrikeColor(percent);
+                return `<span style="color: ${color}; font-weight: 600;">${percent}%</span>`;
+            }
+            
+            if (pitchingAnalysisView === 'gameLog') {
+                // Game Log View - Each row is one pitching outing
+                const pitchingOutings = [];
+                
+                completedGames.forEach(game => {
+                    if (!game.pitchingDetails) return;
+                    
+                    Object.entries(game.pitchingDetails).forEach(([playerId, details]) => {
+                        const player = roster.find(p => p.id == playerId);
+                        if (!player) return;
+                        
+                        const totalPitches = (details.strikes || 0) + (details.balls || 0);
+                        if (totalPitches === 0) return; // Skip if no pitches
+                        
+                        pitchingOutings.push({
+                            date: game.date,
+                            playerName: player.name,
+                            pitches: totalPitches,
+                            strikes: details.strikes || 0,
+                            balls: details.balls || 0,
+                            strikeouts: details.strikeouts || 0,
+                            walks: details.walks || 0,
+                            hitBatters: details.hitBatters || 0,
+                            hitsAllowed: details.hitsAllowed || 0
+                        });
+                    });
+                });
+                
+                // Sort by date (newest first)
+                pitchingOutings.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                if (pitchingOutings.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No pitching data recorded yet</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Pitcher</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Pitches</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Strikes</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Balls</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Strike %</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">K</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">BB</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">HBP</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">H</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pitchingOutings.map(outing => `
+                                    <tr style="border-bottom: 1px solid var(--border);">
+                                        <td style="padding: 12px;">${outing.date}</td>
+                                        <td style="padding: 12px; font-weight: 500;">${outing.playerName}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.pitches}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.strikes}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.balls}</td>
+                                        <td style="padding: 12px; text-align: center;">${formatStrikePercent(outing.strikes, outing.pitches)}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.strikeouts}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.walks}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.hitBatters}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.hitsAllowed}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+            } else {
+                // Summary View - Season averages per pitcher
+                const pitcherStats = {};
+                
+                completedGames.forEach(game => {
+                    if (!game.pitchingDetails) return;
+                    
+                    Object.entries(game.pitchingDetails).forEach(([playerId, details]) => {
+                        const totalPitches = (details.strikes || 0) + (details.balls || 0);
+                        if (totalPitches === 0) return;
+                        
+                        if (!pitcherStats[playerId]) {
+                            const player = roster.find(p => p.id == playerId);
+                            pitcherStats[playerId] = {
+                                playerName: player ? player.name : 'Unknown',
+                                gamesPitched: 0,
+                                totalPitches: 0,
+                                totalStrikes: 0,
+                                totalBalls: 0,
+                                totalStrikeouts: 0,
+                                totalWalks: 0,
+                                totalHitBatters: 0,
+                                totalHitsAllowed: 0
+                            };
+                        }
+                        
+                        pitcherStats[playerId].gamesPitched++;
+                        pitcherStats[playerId].totalPitches += totalPitches;
+                        pitcherStats[playerId].totalStrikes += (details.strikes || 0);
+                        pitcherStats[playerId].totalBalls += (details.balls || 0);
+                        pitcherStats[playerId].totalStrikeouts += (details.strikeouts || 0);
+                        pitcherStats[playerId].totalWalks += (details.walks || 0);
+                        pitcherStats[playerId].totalHitBatters += (details.hitBatters || 0);
+                        pitcherStats[playerId].totalHitsAllowed += (details.hitsAllowed || 0);
+                    });
+                });
+                
+                // Convert to array and calculate averages
+                const pitcherArray = Object.values(pitcherStats).map(stats => {
+                    const strikePercent = stats.totalPitches > 0 ? (stats.totalStrikes / stats.totalPitches) * 100 : 0;
+                    return {
+                        ...stats,
+                        avgStrikesPerGame: (stats.totalStrikes / stats.gamesPitched).toFixed(1),
+                        strikePercent: strikePercent.toFixed(1)
+                    };
+                });
+                
+                // Sort by strike percentage (best first)
+                pitcherArray.sort((a, b) => b.strikePercent - a.strikePercent);
+                
+                if (pitcherArray.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No pitching data recorded yet</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border);">
+                                    <th style="padding: 12px; text-align: left; font-weight: 600;">Pitcher</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Games</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Total Pitches</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Strikes</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Balls</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Strike %</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">Avg Strikes/Game</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">K</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">BB</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">HBP</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">H</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pitcherArray.map(pitcher => `
+                                    <tr style="border-bottom: 1px solid var(--border);">
+                                        <td style="padding: 12px; font-weight: 500;">${pitcher.playerName}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.gamesPitched}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalPitches}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalStrikes}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalBalls}</td>
+                                        <td style="padding: 12px; text-align: center;">${formatStrikePercent(pitcher.totalStrikes, pitcher.totalPitches)}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.avgStrikesPerGame}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalStrikeouts}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalWalks}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalHitBatters}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalHitsAllowed}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            
+            console.log('=== renderPitchingAnalysis complete ===');
+        }
+        
+        // Setup pitching analysis toggle buttons
+        function setupPitchingAnalysisButtons() {
+            const gameLogBtn = document.getElementById('pitchingViewGameLog');
+            const summaryBtn = document.getElementById('pitchingViewSummary');
+            
+            if (!gameLogBtn || !summaryBtn) return;
+            
+            // Update button styles based on active view
+            function updateButtonStyles() {
+                if (pitchingAnalysisView === 'gameLog') {
+                    gameLogBtn.className = 'btn btn-primary';
+                    summaryBtn.className = 'btn btn-secondary';
+                } else {
+                    gameLogBtn.className = 'btn btn-secondary';
+                    summaryBtn.className = 'btn btn-primary';
+                }
+            }
+            
+            gameLogBtn.onclick = () => {
+                pitchingAnalysisView = 'gameLog';
+                updateButtonStyles();
+                renderPitchingAnalysis();
+            };
+            
+            summaryBtn.onclick = () => {
+                pitchingAnalysisView = 'summary';
+                updateButtonStyles();
+                renderPitchingAnalysis();
+            };
+            
+            // Set initial button states
+            updateButtonStyles();
         }
         
         // Save Data
