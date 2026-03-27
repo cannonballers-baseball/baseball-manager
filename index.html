@@ -6308,9 +6308,9 @@
             
             // Helper function to get strike percentage color
             function getStrikeColor(strikePercent) {
-                if (strikePercent > 50) return 'var(--safe-green)';
+                if (strikePercent > 50) return 'var(--diamond-green)';
                 if (strikePercent >= 40) return '#f59e0b'; // yellow
-                return 'var(--warning-red)';
+                return 'var(--alert-red)';
             }
             
             // Helper function to format strike percentage with color
@@ -6627,11 +6627,11 @@
                 // Determine color
                 let color;
                 if (strikePercent > 50) {
-                    color = 'var(--safe-green)';
+                    color = 'var(--diamond-green)';
                 } else if (strikePercent >= 40) {
                     color = '#f59e0b';
                 } else {
-                    color = 'var(--warning-red)';
+                    color = 'var(--alert-red)';
                 }
                 
                 return {
@@ -6682,9 +6682,9 @@
                 </div>
                 <div style="margin-top: 12px; padding: 10px; background: rgba(26, 95, 63, 0.1); border-radius: 6px; font-size: 0.85rem; color: var(--text-secondary);">
                     💡 <strong>Quick Reference:</strong> 
-                    <span style="color: var(--safe-green); font-weight: 600;">Green (>50%)</span> = Strong control | 
+                    <span style="color: var(--diamond-green); font-weight: 600;">Green (>50%)</span> = Strong control | 
                     <span style="color: #f59e0b; font-weight: 600;">Yellow (40-50%)</span> = Developing | 
-                    <span style="color: var(--warning-red); font-weight: 600;">Red (<40%)</span> = Needs work
+                    <span style="color: var(--alert-red); font-weight: 600;">Red (<40%)</span> = Needs work
                 </div>
             `;
         }
