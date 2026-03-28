@@ -2281,7 +2281,10 @@
                 const option = document.createElement('option');
                 option.value = game.id;
                 
-                const gameDate = new Date(game.date).toLocaleDateString('en-US', { 
+                // Parse date manually to avoid timezone issues
+                const [year, month, day] = game.date.split('-').map(num => parseInt(num));
+                const dateObj = new Date(year, month - 1, day);
+                const gameDate = dateObj.toLocaleDateString('en-US', { 
                     month: 'short', 
                     day: 'numeric' 
                 });
@@ -2324,7 +2327,10 @@
                     return;
                 }
                 
-                const gameDate = new Date(sourceGame.date).toLocaleDateString('en-US', { 
+                // Parse date manually to avoid timezone issues
+                const [year, month, day] = sourceGame.date.split('-').map(num => parseInt(num));
+                const dateObj = new Date(year, month - 1, day);
+                const gameDate = dateObj.toLocaleDateString('en-US', { 
                     month: 'short', 
                     day: 'numeric' 
                 });
@@ -3397,13 +3403,19 @@
             const detailsSpan = document.getElementById('selectedGameDetails');
             if (infoDiv && detailsSpan) {
                 infoDiv.style.display = 'block';
-                const gameDate = new Date(currentGame.date).toLocaleDateString('en-US', { 
+                
+                // Parse date manually to avoid timezone issues
+                // currentGame.date is in format "2026-03-28"
+                const [year, month, day] = currentGame.date.split('-').map(num => parseInt(num));
+                const gameDate = new Date(year, month - 1, day); // month is 0-indexed
+                const formattedDate = gameDate.toLocaleDateString('en-US', { 
                     weekday: 'short', 
                     month: 'short', 
                     day: 'numeric' 
                 });
+                
                 detailsSpan.textContent = 
-                    `${formatOpponent(currentGame)} on ${gameDate} at ${currentGame.location || 'TBD'}`;
+                    `${formatOpponent(currentGame)} on ${formattedDate} at ${currentGame.location || 'TBD'}`;
             }
             
             // Render all lineup building sections
@@ -5654,7 +5666,10 @@
             
             // Show current game banner with innings played editor
             if (banner) {
-                const gameDate = new Date(currentGame.date).toLocaleDateString('en-US', { 
+                // Parse date manually to avoid timezone issues
+                const [year, month, day] = currentGame.date.split('-').map(num => parseInt(num));
+                const dateObj = new Date(year, month - 1, day);
+                const gameDate = dateObj.toLocaleDateString('en-US', { 
                     weekday: 'short', 
                     month: 'short', 
                     day: 'numeric',
@@ -6153,7 +6168,9 @@
                 return { class: 'available', text: '✓ Available to pitch' };
             }
             
-            const lastDate = new Date(lastGame.date);
+            // Parse date manually to avoid timezone issues
+            const [year, month, day] = lastGame.date.split('-').map(num => parseInt(num));
+            const lastDate = new Date(year, month - 1, day);
             const daysSince = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
             const requiredRest = calculateRestDays(lastGame);
             
@@ -6344,7 +6361,8 @@
                             strikeouts: details.strikeouts || 0,
                             walks: details.walks || 0,
                             hitBatters: details.hitBatters || 0,
-                            hitsAllowed: details.hitsAllowed || 0
+                            hitsAllowed: details.hitsAllowed || 0,
+                            inningsPitched: details.inningsPitched || 0
                         });
                     });
                 });
@@ -6364,6 +6382,7 @@
                                 <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border);">
                                     <th style="padding: 12px; text-align: left; font-weight: 600;">Date</th>
                                     <th style="padding: 12px; text-align: left; font-weight: 600;">Pitcher</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">IP</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Pitches</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Strikes</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Balls</th>
@@ -6379,6 +6398,7 @@
                                     <tr style="border-bottom: 1px solid var(--border);">
                                         <td style="padding: 12px;">${outing.date}</td>
                                         <td style="padding: 12px; font-weight: 500;">${outing.playerName}</td>
+                                        <td style="padding: 12px; text-align: center;">${outing.inningsPitched || 0}</td>
                                         <td style="padding: 12px; text-align: center;">${outing.pitches}</td>
                                         <td style="padding: 12px; text-align: center;">${outing.strikes}</td>
                                         <td style="padding: 12px; text-align: center;">${outing.balls}</td>
@@ -6416,7 +6436,8 @@
                                 totalStrikeouts: 0,
                                 totalWalks: 0,
                                 totalHitBatters: 0,
-                                totalHitsAllowed: 0
+                                totalHitsAllowed: 0,
+                                totalInningsPitched: 0
                             };
                         }
                         
@@ -6428,6 +6449,7 @@
                         pitcherStats[playerId].totalWalks += (details.walks || 0);
                         pitcherStats[playerId].totalHitBatters += (details.hitBatters || 0);
                         pitcherStats[playerId].totalHitsAllowed += (details.hitsAllowed || 0);
+                        pitcherStats[playerId].totalInningsPitched += (details.inningsPitched || 0);
                     });
                 });
                 
@@ -6456,6 +6478,7 @@
                                 <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border);">
                                     <th style="padding: 12px; text-align: left; font-weight: 600;">Pitcher</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Games</th>
+                                    <th style="padding: 12px; text-align: center; font-weight: 600;">IP</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Total Pitches</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Strikes</th>
                                     <th style="padding: 12px; text-align: center; font-weight: 600;">Balls</th>
@@ -6472,6 +6495,7 @@
                                     <tr style="border-bottom: 1px solid var(--border);">
                                         <td style="padding: 12px; font-weight: 500;">${pitcher.playerName}</td>
                                         <td style="padding: 12px; text-align: center;">${pitcher.gamesPitched}</td>
+                                        <td style="padding: 12px; text-align: center;">${pitcher.totalInningsPitched || 0}</td>
                                         <td style="padding: 12px; text-align: center;">${pitcher.totalPitches}</td>
                                         <td style="padding: 12px; text-align: center;">${pitcher.totalStrikes}</td>
                                         <td style="padding: 12px; text-align: center;">${pitcher.totalBalls}</td>
@@ -6595,6 +6619,7 @@
                             totalPitches: 0,
                             totalStrikes: 0,
                             totalBalls: 0,
+                            totalInningsPitched: 0,
                             lastGameDate: null
                         };
                     }
@@ -6603,6 +6628,7 @@
                     pitcherStats[playerIdInt].totalPitches += totalPitches;
                     pitcherStats[playerIdInt].totalStrikes += (details.strikes || 0);
                     pitcherStats[playerIdInt].totalBalls += (details.balls || 0);
+                    pitcherStats[playerIdInt].totalInningsPitched += (details.inningsPitched || 0);
                     
                     // Track most recent game date
                     if (!pitcherStats[playerIdInt].lastGameDate || game.date > pitcherStats[playerIdInt].lastGameDate) {
@@ -6618,7 +6644,9 @@
                 // Calculate days rest
                 let daysRest = '-';
                 if (stats.lastGameDate) {
-                    const lastGame = new Date(stats.lastGameDate);
+                    // Parse date manually to avoid timezone issues
+                    const [year, month, day] = stats.lastGameDate.split('-').map(num => parseInt(num));
+                    const lastGame = new Date(year, month - 1, day);
                     const diffTime = Math.abs(today - lastGame);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                     daysRest = diffDays;
@@ -6659,6 +6687,7 @@
                                 <th style="padding: 10px; text-align: left; font-weight: 600; font-size: 0.9rem;">Pitcher</th>
                                 <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Strike %</th>
                                 <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Games</th>
+                                <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">IP</th>
                                 <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Last Game</th>
                                 <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Days Rest</th>
                                 <th style="padding: 10px; text-align: center; font-weight: 600; font-size: 0.9rem;">Total Pitches</th>
@@ -6672,6 +6701,7 @@
                                         <span style="color: ${pitcher.color}; font-weight: 600;">${pitcher.strikePercent}%</span>
                                     </td>
                                     <td style="padding: 10px; text-align: center;">${pitcher.gamesPitched}</td>
+                                    <td style="padding: 10px; text-align: center;">${pitcher.totalInningsPitched || 0}</td>
                                     <td style="padding: 10px; text-align: center; font-size: 0.9rem;">${pitcher.lastGameDate || '-'}</td>
                                     <td style="padding: 10px; text-align: center;">${pitcher.daysRest}</td>
                                     <td style="padding: 10px; text-align: center;">${pitcher.totalPitches}</td>
