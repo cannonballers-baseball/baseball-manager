@@ -1735,14 +1735,23 @@
         }
         
         function finalizeGame(gameId) {
-            // Load the game if not current
-            let gameToFinalize = currentGame;
-            if (gameId && gameId !== currentGame.id) {
-                gameToFinalize = seasonData.games.find(g => g.id === gameId);
-                if (!gameToFinalize) {
+            // Load the game if not current - but always get fresh copy from seasonData
+            let gameToFinalize;
+            if (gameId) {
+                // Always get from seasonData to ensure we have latest data including pitchingDetails
+                const gameFromStorage = seasonData.games.find(g => g.id === gameId);
+                if (!gameFromStorage) {
                     alert('Game not found');
                     return;
                 }
+                // Merge with currentGame to get any unsaved changes
+                gameToFinalize = currentGame.id === gameId ? currentGame : gameFromStorage;
+                // Ensure pitchingDetails exists from storage
+                if (!gameToFinalize.pitchingDetails && gameFromStorage.pitchingDetails) {
+                    gameToFinalize.pitchingDetails = gameFromStorage.pitchingDetails;
+                }
+            } else {
+                gameToFinalize = currentGame;
             }
             
             if (!gameToFinalize.id) {
@@ -1755,6 +1764,8 @@
         }
         
         function showPitchSummaryModal(game) {
+            console.log('showPitchSummaryModal - game.pitchingDetails:', game.pitchingDetails);
+            
             const unavailableIds = game.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
             
@@ -1804,7 +1815,7 @@
                             <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--diamond-green);">
                                 Innings Played (1-6):
                             </label>
-                            <input type="number" id="inningsPlayed" min="1" max="6" value="6" 
+                            <input type="number" id="inningsPlayed" min="1" max="6" value="${game.inningsPlayed || 6}" 
                                    style="width: 100%; padding: 12px; font-size: 1.2rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
                             <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
                                 💡 Enter actual innings played if game ended early
@@ -1819,6 +1830,7 @@
                             ${pitchersThisGame.map(pitcher => {
                                 // Check for existing pitching details (sticky data)
                                 const existingDetails = game.pitchingDetails?.[pitcher.id] || {};
+                                console.log(`Pitcher ${pitcher.name} (ID ${pitcher.id}) existing details:`, existingDetails);
                                 const existingIP = existingDetails.inningsPitched || 0;
                                 const existingHits = existingDetails.hitsAllowed || 0;
                                 const existingStrikes = existingDetails.strikes || 0;
@@ -2635,7 +2647,17 @@
             
             // Reopen the game for editing
             game.status = 'in-progress';
-            currentGame = { ...game };
+            // Deep copy pitchingDetails to preserve existing data for each pitcher
+            const pitchingDetailsCopy = {};
+            if (game.pitchingDetails) {
+                Object.keys(game.pitchingDetails).forEach(playerId => {
+                    pitchingDetailsCopy[playerId] = { ...game.pitchingDetails[playerId] };
+                });
+            }
+            currentGame = { 
+                ...game,
+                pitchingDetails: pitchingDetailsCopy
+            };
             seasonData.currentGameId = game.id;
             
             saveData();
@@ -6803,6 +6825,12 @@
                     </div>
                     
                     <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                        <button class="btn" onclick="printGameDaySheet(); document.body.removeChild(this.closest('[style*=fixed]'))" 
+                                style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--diamond-green);">
+                            <span style="font-size: 1.3rem;">🖨️</span>
+                            <span>Print Game Day Sheet</span>
+                        </button>
+                        
                         <button class="btn" onclick="exportLineupAsExcel(); document.body.removeChild(this.closest('[style*=fixed]'))" 
                                 style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
                             <span style="font-size: 1.3rem;">📊</span>
@@ -6824,6 +6852,29 @@
             `;
             
             document.body.appendChild(modal);
+        }
+        
+        function printGameDaySheet() {
+            if (!currentGame.id) {
+                alert('Please select a game first');
+                return;
+            }
+            
+            const gameDate = formatGameDate(currentGame.date);
+            const opponent = formatOpponent(currentGame);
+            
+            // Create print window
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                alert('Please allow pop-ups to print the game day sheet');
+                return;
+            }
+            
+            const htmlContent = '<!DOCTYPE html><html><head><title>Game Day Sheet</title></head><body><h1>CANNON BALLERS</h1><p>Game: ' + gameDate + ' vs ' + opponent + '</p></body></html>';
+            
+            printWindow.document.write(htmlContent);
+            printWindow.document.close();
+            printWindow.print();
         }
         
         function exportLineupAsCSV() {
