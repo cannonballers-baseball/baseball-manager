@@ -6825,17 +6825,14 @@
                     </div>
                     
                     <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
-                        <button class="btn" onclick="printGameDaySheet(); document.body.removeChild(this.closest('[style*=fixed]'))" 
-                                style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--diamond-green);">
-                            <span style="font-size: 1.3rem;">🖨️</span>
-                            <span>Print Game Day Sheet</span>
-                        </button>
-                        
                         <button class="btn" onclick="exportLineupAsExcel(); document.body.removeChild(this.closest('[style*=fixed]'))" 
                                 style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
                             <span style="font-size: 1.3rem;">📊</span>
                             <span>Export as Excel (.xlsx)</span>
                         </button>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); padding: 0 8px; text-align: center;">
+                            Includes lineup + pitching & batting trackers
+                        </div>
                         
                         <button class="btn btn-secondary" onclick="exportLineupAsCSV(); document.body.removeChild(this.closest('[style*=fixed]'))" 
                                 style="padding: 16px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -7096,6 +7093,95 @@
             ];
             lineupSheet['!cols'] = cols;
             XLSX.utils.book_append_sheet(wb, lineupSheet, 'Lineup');
+            
+            // PITCHING TRACKER SHEET
+            const pitchingData = [
+                ['PITCHING TRACKER'],
+                [''],
+                ['Pitcher', 'IP', 'Pitches', 'Strikes', 'Balls', 'K', 'BB', 'HBP', 'H']
+            ];
+            
+            // Add pitchers who are assigned to pitch this game
+            const pitchersAdded = new Set();
+            Object.entries(currentGame.pitching || {}).forEach(([playerId, pitchCount]) => {
+                if (pitchCount > 0) {
+                    const player = roster.find(p => p.id === parseInt(playerId));
+                    if (player) {
+                        pitchingData.push([player.name, '', '', '', '', '', '', '', '']);
+                        pitchersAdded.add(player.name);
+                    }
+                }
+            });
+            
+            // Add 3 blank rows for substitutes
+            for (let i = 1; i <= 3; i++) {
+                pitchingData.push([`(substitute ${i})`, '', '', '', '', '', '', '', '']);
+            }
+            
+            const pitchingSheet = XLSX.utils.aoa_to_sheet(pitchingData);
+            pitchingSheet['!cols'] = [
+                { wch: 20 },  // Pitcher
+                { wch: 6 },   // IP
+                { wch: 10 },  // Pitches
+                { wch: 10 },  // Strikes
+                { wch: 10 },  // Balls
+                { wch: 6 },   // K
+                { wch: 6 },   // BB
+                { wch: 6 },   // HBP
+                { wch: 6 }    // H
+            ];
+            XLSX.utils.book_append_sheet(wb, pitchingSheet, 'Pitching Tracker');
+            
+            // BATTING TRACKER SHEET
+            const battingData = [
+                ['BATTING TRACKER'],
+                ['Track hits (H), strikeouts (K), walks (BB), etc. in the at-bat columns'],
+                [''],
+                ['Batter', 'At-Bat 1', 'At-Bat 2', 'At-Bat 3', 'At-Bat 4', 'At-Bat 5']
+            ];
+            
+            // Add all players in batting order
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    if (player) {
+                        battingData.push([player.name, '', '', '', '', '']);
+                    }
+                }
+            });
+            
+            // Add players not in batting order but playing
+            roster.forEach(player => {
+                if (!playersInBattingOrder.has(player.id) && !unavailableIds.includes(player.id)) {
+                    // Check if they're assigned anywhere
+                    let isAssigned = false;
+                    inningsToShow.forEach((_, inningIdx) => {
+                        for (const pos of positions) {
+                            if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
+                                isAssigned = true;
+                            }
+                        }
+                    });
+                    
+                    if (isAssigned) {
+                        battingData.push([player.name, '', '', '', '', '']);
+                    }
+                }
+            });
+            
+            battingData.push(['']);
+            battingData.push(['Common codes: H=Hit, K=Strikeout, BB=Walk, HBP=Hit by Pitch, FC=Fielder\'s Choice, E=Error, SAC=Sacrifice']);
+            
+            const battingSheet = XLSX.utils.aoa_to_sheet(battingData);
+            battingSheet['!cols'] = [
+                { wch: 20 },  // Batter
+                { wch: 12 },  // At-Bat 1
+                { wch: 12 },  // At-Bat 2
+                { wch: 12 },  // At-Bat 3
+                { wch: 12 },  // At-Bat 4
+                { wch: 12 }   // At-Bat 5
+            ];
+            XLSX.utils.book_append_sheet(wb, battingSheet, 'Batting Tracker');
             
             // Download
             const filename = `lineup_${currentGame.opponent}_${currentGame.date}.xlsx`;
