@@ -7094,94 +7094,101 @@
             lineupSheet['!cols'] = cols;
             XLSX.utils.book_append_sheet(wb, lineupSheet, 'Lineup');
             
-            // PITCHING TRACKER SHEET
-            const pitchingData = [
-                ['PITCHING TRACKER'],
-                [''],
-                ['Pitcher', 'IP', 'Pitches', 'Strikes', 'Balls', 'K', 'BB', 'HBP', 'H']
-            ];
+            // GAME DAY TRACKING SHEET (Single Page)
+            const gameDayData = [];
             
-            // Add pitchers who are assigned to pitch this game
-            const pitchersAdded = new Set();
+            // Header
+            gameDayData.push(['CANNON BALLERS - GAME DAY SHEET']);
+            gameDayData.push([`${gameDate} vs ${currentGame.opponent || 'TBD'}`]);
+            gameDayData.push(['']);
+            
+            // SECTION 1: BATTING ORDER (for game manager)
+            gameDayData.push(['BATTING ORDER']);
+            gameDayData.push(['Order', '#', 'Player']);
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const jerseyNum = player && player.number ? player.number : '';
+                    gameDayData.push([idx + 1, jerseyNum, player ? player.name : 'Unknown']);
+                }
+            });
+            gameDayData.push(['']);
+            
+            // SECTION 2: DEFENSIVE LINEUP GRID
+            gameDayData.push(['DEFENSIVE POSITIONS']);
+            const lineupGridHeader = ['Order', 'Player', ...inningsToShow.map((_, idx) => `Inn ${idx + 1}`)];
+            gameDayData.push(lineupGridHeader);
+            
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const positionsPerInning = inningsToShow.map((_, inningIdx) => {
+                        for (const pos of positions) {
+                            if (currentGame.lineup[`${inningIdx}-${pos}`] === playerId) {
+                                return pos;
+                            }
+                        }
+                        for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                            if (currentGame.lineup[`${inningIdx}-Bench${benchNum}`] === playerId) {
+                                return 'BENCH';
+                            }
+                        }
+                        return '';
+                    });
+                    gameDayData.push([idx + 1, player ? player.name : 'Unknown', ...positionsPerInning]);
+                }
+            });
+            gameDayData.push(['']);
+            
+            // SECTION 3: PITCHING TRACKER (Compact - just K, BB, HBP, H)
+            gameDayData.push(['PITCHING TRACKER']);
+            gameDayData.push(['Pitcher', 'K', 'BB', 'HBP', 'H']);
+            
+            // Add assigned pitchers
             Object.entries(currentGame.pitching || {}).forEach(([playerId, pitchCount]) => {
                 if (pitchCount > 0) {
                     const player = roster.find(p => p.id === parseInt(playerId));
                     if (player) {
-                        pitchingData.push([player.name, '', '', '', '', '', '', '', '']);
-                        pitchersAdded.add(player.name);
+                        gameDayData.push([player.name, '', '', '', '']);
                     }
                 }
             });
             
-            // Add 3 blank rows for substitutes
-            for (let i = 1; i <= 3; i++) {
-                pitchingData.push([`(substitute ${i})`, '', '', '', '', '', '', '', '']);
-            }
+            // Add 2 blank rows for substitutes
+            gameDayData.push(['(substitute)', '', '', '', '']);
+            gameDayData.push(['(substitute)', '', '', '', '']);
+            gameDayData.push(['']);
             
-            const pitchingSheet = XLSX.utils.aoa_to_sheet(pitchingData);
-            pitchingSheet['!cols'] = [
-                { wch: 20 },  // Pitcher
-                { wch: 6 },   // IP
-                { wch: 10 },  // Pitches
-                { wch: 10 },  // Strikes
-                { wch: 10 },  // Balls
-                { wch: 6 },   // K
-                { wch: 6 },   // BB
-                { wch: 6 },   // HBP
-                { wch: 6 }    // H
-            ];
-            XLSX.utils.book_append_sheet(wb, pitchingSheet, 'Pitching Tracker');
+            // SECTION 4: BATTING TRACKER
+            gameDayData.push(['BATTING TRACKER - Use codes: H=Hit, K=Strikeout, BB=Walk, HBP=Hit by Pitch']);
+            gameDayData.push(['Order', 'Player', 'AB1', 'AB2', 'AB3', 'AB4', 'AB5']);
             
-            // BATTING TRACKER SHEET
-            const battingData = [
-                ['BATTING TRACKER'],
-                ['Track hits (H), strikeouts (K), walks (BB), etc. in the at-bat columns'],
-                [''],
-                ['Batter', 'At-Bat 1', 'At-Bat 2', 'At-Bat 3', 'At-Bat 4', 'At-Bat 5']
-            ];
-            
-            // Add all players in batting order
             currentGame.battingOrder.forEach((playerId, idx) => {
                 if (playerId) {
                     const player = roster.find(p => p.id === playerId);
                     if (player) {
-                        battingData.push([player.name, '', '', '', '', '']);
+                        gameDayData.push([idx + 1, player.name, '', '', '', '', '']);
                     }
                 }
             });
             
-            // Add players not in batting order but playing
-            roster.forEach(player => {
-                if (!playersInBattingOrder.has(player.id) && !unavailableIds.includes(player.id)) {
-                    // Check if they're assigned anywhere
-                    let isAssigned = false;
-                    inningsToShow.forEach((_, inningIdx) => {
-                        for (const pos of positions) {
-                            if (currentGame.lineup[`${inningIdx}-${pos}`] === player.id) {
-                                isAssigned = true;
-                            }
-                        }
-                    });
-                    
-                    if (isAssigned) {
-                        battingData.push([player.name, '', '', '', '', '']);
-                    }
-                }
-            });
-            
-            battingData.push(['']);
-            battingData.push(['Common codes: H=Hit, K=Strikeout, BB=Walk, HBP=Hit by Pitch, FC=Fielder\'s Choice, E=Error, SAC=Sacrifice']);
-            
-            const battingSheet = XLSX.utils.aoa_to_sheet(battingData);
-            battingSheet['!cols'] = [
-                { wch: 20 },  // Batter
-                { wch: 12 },  // At-Bat 1
-                { wch: 12 },  // At-Bat 2
-                { wch: 12 },  // At-Bat 3
-                { wch: 12 },  // At-Bat 4
-                { wch: 12 }   // At-Bat 5
+            const gameDaySheet = XLSX.utils.aoa_to_sheet(gameDayData);
+            gameDaySheet['!cols'] = [
+                { wch: 8 },   // Order
+                { wch: 20 },  // Player/Name
+                { wch: 10 },  // Variable columns
+                { wch: 10 },
+                { wch: 10 },
+                { wch: 10 },
+                { wch: 10 },
+                { wch: 10 }
             ];
-            XLSX.utils.book_append_sheet(wb, battingSheet, 'Batting Tracker');
+            
+            // Set print area to fit on one page
+            gameDaySheet['!printHeader'] = ['A1:H1'];
+            gameDaySheet['!margins'] = { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 };
+            
+            XLSX.utils.book_append_sheet(wb, gameDaySheet, 'Game Day Sheet');
             
             // Download
             const filename = `lineup_${currentGame.opponent}_${currentGame.date}.xlsx`;
