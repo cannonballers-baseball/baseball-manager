@@ -1792,6 +1792,12 @@
                 }
             }
             
+            // Build additional pitcher options before modal
+            let additionalPitcherOptions = '<option value="">-- Select if used a substitute --</option>';
+            availablePlayers.filter(p => !pitcherIds.has(p.id)).forEach(p => {
+                additionalPitcherOptions += '<option value="' + p.id + '">' + p.name + '</option>';
+            });
+            
             // Create modal
             const modal = document.createElement('div');
             modal.style.cssText = `
@@ -1911,10 +1917,7 @@
                             <div style="margin-bottom: 12px;">
                                 <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Select Player:</label>
                                 <select id="additionalPitcherSelect" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-                                    <option value="">-- Select if used a substitute --</option>
-                                    ${availablePlayers.filter(p => !pitcherIds.has(p.id)).map(p => 
-                                        `<option value="${p.id}">${p.name}</option>`
-                                    ).join('')}
+                                    ${additionalPitcherOptions}
                                 </select>
                             </div>
                             <div id="additionalPitcherFields" style="display: none;">
@@ -1958,17 +1961,6 @@
                             </div>
                         </div>
                         
-                        <script>
-                            document.getElementById('additionalPitcherSelect').addEventListener('change', function(e) {
-                                const fieldsDiv = document.getElementById('additionalPitcherFields');
-                                if (e.target.value) {
-                                    fieldsDiv.style.display = 'block';
-                                } else {
-                                    fieldsDiv.style.display = 'none';
-                                }
-                            });
-                        </script>
-                        
                         <div style="display: flex; gap: 12px; margin-top: 24px;">
                             <button class="btn" onclick="completeFinalizeGame('${game.id}')" style="flex: 1; padding: 16px; font-size: 1.1rem;">
                                 💾 SAVE & FINISH GAME
@@ -1982,6 +1974,18 @@
             `;
             
             document.body.appendChild(modal);
+            
+            // Add event listener for additional pitcher dropdown (after modal is in DOM)
+            const additionalPitcherSelect = document.getElementById('additionalPitcherSelect');
+            if (additionalPitcherSelect) {
+                additionalPitcherSelect.addEventListener('change', function(e) {
+                    const fieldsDiv = document.getElementById('additionalPitcherFields');
+                    if (fieldsDiv) {
+                        fieldsDiv.style.display = e.target.value ? 'block' : 'none';
+                    }
+                });
+            }
+            
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
@@ -2012,11 +2016,13 @@
             const inningsPlayed = parseInt(inningsPlayedInput?.value || 6);
             game.inningsPlayed = inningsPlayed;
             
-            // Check if additional pitcher was added
+            // Check if additional pitcher was added (may not exist if modal doesn't have the section)
             const additionalPitcherSelect = document.getElementById('additionalPitcherSelect');
-            const additionalPitcherId = additionalPitcherSelect?.value;
+            let additionalPitcherId = null;
             
-            if (additionalPitcherId) {
+            if (additionalPitcherSelect && additionalPitcherSelect.value) {
+                additionalPitcherId = additionalPitcherSelect.value;
+                
                 // Get the pitch count from strikes + balls
                 const strikes = parseInt(document.getElementById('strikes_additional')?.value || 0);
                 const balls = parseInt(document.getElementById('balls_additional')?.value || 0);
@@ -6051,6 +6057,7 @@
         
         function renderBattingTracker() {
             const container = document.getElementById('battingTrackerGrid');
+            if (!container) return; // Safety check - element doesn't exist yet
             
             if (!currentGame.id) {
                 container.innerHTML = '';
@@ -6179,17 +6186,19 @@
                 `;
             }
             
-            // Add finalize game button at the bottom of batting section
-            container.innerHTML += `
-                <div style="grid-column: 1 / -1; margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--border-color); text-align: center;">
-                    <button class="btn" onclick="finalizeCurrentGame()" style="padding: 16px 48px; font-size: 1.1rem;">
-                        💾 SAVE IN-GAME STATS & FINISH
-                    </button>
-                    <div style="margin-top: 12px; color: var(--text-secondary); font-size: 0.85rem;">
-                        Saves pitching, batting, and lineup stats to season totals
+            // Add finalize game button at the bottom of batting section (only if there's an active game)
+            if (currentGame.id && currentGame.status === 'in-progress') {
+                container.innerHTML += `
+                    <div style="grid-column: 1 / -1; margin-top: 32px; padding-top: 24px; border-top: 2px solid var(--border-color); text-align: center;">
+                        <button class="btn" onclick="finalizeCurrentGame()" style="padding: 16px 48px; font-size: 1.1rem;">
+                            💾 SAVE IN-GAME STATS & FINISH
+                        </button>
+                        <div style="margin-top: 12px; color: var(--text-secondary); font-size: 0.85rem;">
+                            Saves pitching, batting, and lineup stats to season totals
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
         
         function resetAllPitches() {
@@ -8120,11 +8129,14 @@
             localStorage.setItem('setupWizardCompleted', 'true');
             document.getElementById('setupWizard')?.remove();
             
-            // Now initialize the app
-            renderRoster();
-            renderGameManager(); // This also calls refreshOpponentDropdown
-            renderLineupBuilder();
-            renderPitchCounter();
+            // Use setTimeout to ensure the modal DOM cleanup completes before rendering
+            setTimeout(() => {
+                // Now initialize the app
+                renderRoster();
+                renderGameManager(); // This also calls refreshOpponentDropdown
+                renderLineupBuilder();
+                renderPitchCounter();
+            }, 0);
         }
         
         init();
