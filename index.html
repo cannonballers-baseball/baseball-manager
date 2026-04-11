@@ -7333,7 +7333,7 @@
             let currentRow = 1;
             
             // TITLE
-            worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+            worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
             const titleCell = worksheet.getCell(`A${currentRow}`);
             titleCell.value = 'CANNON BALLERS - GAME DAY SHEET';
             titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
@@ -7342,7 +7342,7 @@
             currentRow++;
             
             // SUBTITLE
-            worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+            worksheet.mergeCells(`A${currentRow}:G${currentRow}`);
             const subtitleCell = worksheet.getCell(`A${currentRow}`);
             subtitleCell.value = `${gameDate} vs ${opponent}`;
             subtitleCell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
