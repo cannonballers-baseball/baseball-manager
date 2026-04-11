@@ -2801,9 +2801,16 @@
             
             // Get current values
             const currentDate = game.date;
-            const currentOpponent = game.opponent || '';
-            const currentLocation = game.location || '';
+            const currentOpponent = game.opponent || 'TBD';
+            const currentLocation = game.location || 'TBD';
             const currentStatus = game.status || 'scheduled';
+            
+            // Format current date for display
+            const formattedDate = formatGameDate(currentDate, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+            });
             
             // Create modal
             const modal = document.createElement('div');
@@ -2825,10 +2832,10 @@
                 <div style="background: var(--bg-card); max-width: 500px; width: 100%; border-radius: 16px; border: 2px solid var(--diamond-green);">
                     <div style="padding: 24px; border-bottom: 2px solid var(--border-color);">
                         <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 2px; margin-bottom: 8px; color: var(--diamond-green);">
-                            📝 EDIT GAME DETAILS
+                            📝 EDIT GAME STATUS
                         </h2>
                         <div style="color: var(--text-secondary);">
-                            Update date, opponent, location, or status
+                            ${currentOpponent} at ${currentLocation}
                         </div>
                     </div>
                     
@@ -2839,30 +2846,9 @@
                             </label>
                             <input type="date" id="editGameDate" value="${currentDate}" 
                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-                        </div>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
-                                Opponent:
-                            </label>
-                            <select id="editGameOpponent" 
-                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-                                <option value="">Select Team</option>
-                            </select>
-                        </div>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
-                                Location:
-                            </label>
-                            <select id="editGameLocation"
-                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
-                                <option value="Phoenix Park">Phoenix Park</option>
-                                <option value="Lovitt">Lovitt</option>
-                                <option value="Coleman/CMP">Coleman/CMP</option>
-                                <option value="Carnegie">Carnegie</option>
-                                <option value="Away">Away Field</option>
-                            </select>
+                            <div style="margin-top: 6px; font-size: 0.85rem; color: var(--text-secondary);">
+                                Currently: ${formattedDate}
+                            </div>
                         </div>
                         
                         <div style="margin-bottom: 20px;">
@@ -2875,8 +2861,11 @@
                                 <option value="postponed">⏸️ Postponed - Rain-out or delayed</option>
                                 <option value="cancelled">❌ Cancelled - Game won't be played</option>
                             </select>
-                            <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
-                                💡 Use "Postponed" for rain-outs, then change back to "Scheduled" when you have a new date
+                            <div style="margin-top: 8px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                                <strong>💡 Quick Guide:</strong><br>
+                                • <strong>Postponed</strong> = Rained out today, will reschedule<br>
+                                • <strong>Scheduled</strong> = Ready to play on the date shown<br>
+                                • <strong>Cancelled</strong> = Game won't be played
                             </div>
                         </div>
                         
@@ -2894,24 +2883,9 @@
             
             document.body.appendChild(modal);
             
-            // Populate opponent dropdown with current opponents
-            const opponentSelect = document.getElementById('editGameOpponent');
-            const opponents = getOpponents();
-            opponents.forEach(opp => {
-                const option = document.createElement('option');
-                option.value = opp;
-                option.textContent = opp;
-                if (opp === currentOpponent) option.selected = true;
-                opponentSelect.appendChild(option);
-            });
-            
-            // Set current location
-            const locationSelect = document.getElementById('editGameLocation');
-            locationSelect.value = currentLocation;
-            
-            // Set current status (handle old games that might have 'not-started' or 'in-progress')
+            // Set current status (handle old games that might have 'scheduled' or 'in-progress')
             const statusSelect = document.getElementById('editGameStatus');
-            if (currentStatus === 'not-started' || currentStatus === 'in-progress') {
+            if (currentStatus === 'in-progress') {
                 statusSelect.value = 'scheduled';
             } else {
                 statusSelect.value = currentStatus;
@@ -2931,8 +2905,6 @@
             
             // Get new values
             const newDate = document.getElementById('editGameDate').value;
-            const newOpponent = document.getElementById('editGameOpponent').value;
-            const newLocation = document.getElementById('editGameLocation').value;
             const newStatus = document.getElementById('editGameStatus').value;
             
             // Validate date
@@ -2941,17 +2913,10 @@
                 return;
             }
             
-            // Validate opponent
-            if (!newOpponent) {
-                alert('Please select an opponent');
-                return;
-            }
-            
-            // Update game details
+            // Update game details (opponent and location stay the same)
             const oldDate = game.date;
+            const oldStatus = game.status || 'scheduled';
             game.date = newDate;
-            game.opponent = newOpponent;
-            game.location = newLocation;
             game.status = newStatus;
             
             saveData();
@@ -2963,8 +2928,6 @@
             renderGameManager();
             if (currentGame.id === gameId) {
                 currentGame.date = newDate;
-                currentGame.opponent = newOpponent;
-                currentGame.location = newLocation;
                 currentGame.status = newStatus;
                 renderLineupBuilder();
             }
@@ -2973,14 +2936,18 @@
             const statusText = newStatus === 'postponed' ? 'POSTPONED' : 
                               newStatus === 'cancelled' ? 'CANCELLED' : 'SCHEDULED';
             const dateChanged = oldDate !== newDate;
+            const statusChanged = oldStatus !== newStatus;
             
-            let message = `✅ Game details updated!\n\n`;
-            message += `Status: ${statusText}\n`;
+            let message = `✅ Game updated!\n\n`;
+            if (statusChanged) {
+                message += `Status: ${statusText}\n`;
+            }
             if (dateChanged) {
                 message += `Date: ${formatGameDate(oldDate)} → ${formatGameDate(newDate)}\n`;
             }
-            message += `Opponent: ${newOpponent}\n`;
-            message += `Location: ${newLocation}`;
+            if (!dateChanged && !statusChanged) {
+                message = '✅ No changes made';
+            }
             
             alert(message);
         }
@@ -7783,8 +7750,11 @@
             const opponents = getOpponents();
             const current = select.value;
             
+            // Sort alphabetically
+            const sortedOpponents = [...opponents].sort((a, b) => a.localeCompare(b));
+            
             select.innerHTML = '<option value="">Select Team</option>' +
-                opponents.map(o => `<option value="${o}" ${o === current ? 'selected' : ''}>${o}</option>`).join('');
+                sortedOpponents.map(o => `<option value="${o}" ${o === current ? 'selected' : ''}>${o}</option>`).join('');
         }
 
         // ============================================
