@@ -1769,20 +1769,28 @@
             const unavailableIds = game.unavailablePlayers || [];
             const availablePlayers = roster.filter(p => !unavailableIds.includes(p.id));
             
-            // Find all pitchers who pitched this game
+            const inningsPlayed = game.inningsPlayed || 6;
+            
+            // Find all pitchers assigned to "P" position in any inning
             const pitchersThisGame = [];
-            Object.entries(game.pitching || {}).forEach(([playerId, pitches]) => {
-                if (pitches > 0) {
-                    const player = roster.find(p => p.id === parseInt(playerId));
+            const pitcherIds = new Set();
+            
+            for (let inningIdx = 0; inningIdx < inningsPlayed; inningIdx++) {
+                const pitcherId = game.lineup[`${inningIdx}-P`];
+                if (pitcherId && !pitcherIds.has(pitcherId)) {
+                    pitcherIds.add(pitcherId);
+                    const player = roster.find(p => p.id === pitcherId);
                     if (player) {
+                        // Get total pitches for this pitcher
+                        const totalPitches = game.pitching?.[pitcherId] || 0;
                         pitchersThisGame.push({
-                            id: parseInt(playerId),
+                            id: pitcherId,
                             name: player.name,
-                            totalPitches: pitches
+                            totalPitches: totalPitches
                         });
                     }
                 }
-            });
+            }
             
             // Create modal
             const modal = document.createElement('div');
@@ -1895,6 +1903,72 @@
                             </div>
                         `}
                         
+                        <!-- Add Additional Pitcher Section -->
+                        <div style="margin-top: 24px; padding: 16px; background: rgba(26, 95, 63, 0.1); border-radius: 10px; border: 2px dashed var(--border-color);">
+                            <div style="font-weight: 700; margin-bottom: 12px; color: var(--diamond-green);">
+                                ➕ Add Substitute Pitcher (if needed)
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Select Player:</label>
+                                <select id="additionalPitcherSelect" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    <option value="">-- Select if used a substitute --</option>
+                                    ${availablePlayers.filter(p => !pitcherIds.has(p.id)).map(p => 
+                                        `<option value="${p.id}">${p.name}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div id="additionalPitcherFields" style="display: none;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Innings Pitched (IP)</label>
+                                        <input type="number" id="inningsPitched_additional" min="0" max="6" step="0.1" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Hits Allowed (H)</label>
+                                        <input type="number" id="hitsAllowed_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Strikes</label>
+                                        <input type="number" id="strikes_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Balls</label>
+                                        <input type="number" id="balls_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Strikeouts (K)</label>
+                                        <input type="number" id="strikeouts_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Walks (BB)</label>
+                                        <input type="number" id="walks_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px;">Hit Batters (HBP)</label>
+                                        <input type="number" id="hitBatters_additional" min="0" value="0" 
+                                               style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <script>
+                            document.getElementById('additionalPitcherSelect').addEventListener('change', function(e) {
+                                const fieldsDiv = document.getElementById('additionalPitcherFields');
+                                if (e.target.value) {
+                                    fieldsDiv.style.display = 'block';
+                                } else {
+                                    fieldsDiv.style.display = 'none';
+                                }
+                            });
+                        </script>
+                        
                         <div style="display: flex; gap: 12px; margin-top: 24px;">
                             <button class="btn" onclick="completeFinalizeGame('${game.id}')" style="flex: 1; padding: 16px; font-size: 1.1rem;">
                                 💾 SAVE & FINISH GAME
@@ -1938,6 +2012,23 @@
             const inningsPlayed = parseInt(inningsPlayedInput?.value || 6);
             game.inningsPlayed = inningsPlayed;
             
+            // Check if additional pitcher was added
+            const additionalPitcherSelect = document.getElementById('additionalPitcherSelect');
+            const additionalPitcherId = additionalPitcherSelect?.value;
+            
+            if (additionalPitcherId) {
+                // Get the pitch count from strikes + balls
+                const strikes = parseInt(document.getElementById('strikes_additional')?.value || 0);
+                const balls = parseInt(document.getElementById('balls_additional')?.value || 0);
+                const totalPitches = strikes + balls;
+                
+                // Add to game.pitching if they actually pitched
+                if (totalPitches > 0) {
+                    if (!game.pitching) game.pitching = {};
+                    game.pitching[additionalPitcherId] = totalPitches;
+                }
+            }
+            
             // Collect pitch outcomes for all pitchers
             if (!game.pitchingDetails) game.pitchingDetails = {};
             
@@ -1976,6 +2067,32 @@
                     };
                 }
             });
+            
+            // Handle additional pitcher details if added
+            if (additionalPitcherId) {
+                const strikes = parseInt(document.getElementById('strikes_additional')?.value || 0);
+                const balls = parseInt(document.getElementById('balls_additional')?.value || 0);
+                const totalPitches = strikes + balls;
+                
+                if (totalPitches > 0) {
+                    const inningsPitched = parseFloat(document.getElementById('inningsPitched_additional')?.value || 0);
+                    const hitsAllowed = parseInt(document.getElementById('hitsAllowed_additional')?.value || 0);
+                    const strikeouts = parseInt(document.getElementById('strikeouts_additional')?.value || 0);
+                    const walks = parseInt(document.getElementById('walks_additional')?.value || 0);
+                    const hitBatters = parseInt(document.getElementById('hitBatters_additional')?.value || 0);
+                    
+                    game.pitchingDetails[additionalPitcherId] = {
+                        totalPitches,
+                        inningsPitched,
+                        hitsAllowed,
+                        strikes,
+                        balls,
+                        strikeouts,
+                        walks,
+                        hitBatters
+                    };
+                }
+            }
             
             // If there are validation errors, show them and don't close modal
             if (validationErrors.length > 0) {
@@ -7092,7 +7209,7 @@
                 ...inningsToShow.map(() => ({ wch: 10 }))  // Innings
             ];
             lineupSheet['!cols'] = cols;
-            XLSX.utils.book_append_sheet(wb, lineupSheet, 'Lineup');
+            // Lineup sheet removed - user only needs Game Day Sheet
             
             // GAME DAY TRACKING SHEET (Single Page)
             const gameDayData = [];
@@ -7144,18 +7261,24 @@
             gameDayData.push(['PITCHING TRACKER']);
             gameDayData.push(['Pitcher', 'K', 'BB', 'HBP', 'H']);
             
-            // Add assigned pitchers
-            Object.entries(currentGame.pitching || {}).forEach(([playerId, pitchCount]) => {
-                if (pitchCount > 0) {
-                    const player = roster.find(p => p.id === parseInt(playerId));
-                    if (player) {
-                        gameDayData.push([player.name, '', '', '', '']);
-                    }
+            // Find all players assigned to "P" position in any inning
+            const pitchersSet = new Set();
+            inningsToShow.forEach((_, inningIdx) => {
+                const pitcherId = currentGame.lineup[`${inningIdx}-P`];
+                if (pitcherId) {
+                    pitchersSet.add(pitcherId);
                 }
             });
             
-            // Add 2 blank rows for substitutes
-            gameDayData.push(['(substitute)', '', '', '', '']);
+            // Add pitchers to the sheet
+            pitchersSet.forEach(pitcherId => {
+                const player = roster.find(p => p.id === pitcherId);
+                if (player) {
+                    gameDayData.push([player.name, '', '', '', '']);
+                }
+            });
+            
+            // Add 1 blank row for substitute pitcher
             gameDayData.push(['(substitute)', '', '', '', '']);
             gameDayData.push(['']);
             
