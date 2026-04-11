@@ -7476,13 +7476,13 @@
             
             // SECTION 4: BATTING TRACKER
             gameDayData.push(['BATTING TRACKER - Use codes: H=Hit, K=Strikeout, BB=Walk, HBP=Hit by Pitch']);
-            gameDayData.push(['Order', 'Player', 'AB1', 'AB2', 'AB3', 'AB4', 'AB5']);
+            gameDayData.push(['Player', 'AB1', 'AB2', 'AB3', 'AB4']);
             
             currentGame.battingOrder.forEach((playerId, idx) => {
                 if (playerId) {
                     const player = roster.find(p => p.id === playerId);
                     if (player) {
-                        gameDayData.push([idx + 1, player.name, '', '', '', '', '']);
+                        gameDayData.push([player.name, '', '', '', '']);
                     }
                 }
             });
@@ -7604,6 +7604,134 @@
                                         right: { style: "thin", color: { rgb: "CCCCCC" } }
                                     }
                                 });
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Apply borders to ALL data cells in each section to create proper tables
+            const borderStyle = {
+                top: { style: "thin", color: { rgb: "CCCCCC" } },
+                bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+                left: { style: "thin", color: { rgb: "CCCCCC" } },
+                right: { style: "thin", color: { rgb: "CCCCCC" } }
+            };
+            
+            // Find and border BATTING ORDER section
+            for (let R = 0; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v === 'BATTING ORDER') {
+                    const headerRow = R + 1;
+                    // Apply borders to header and data rows
+                    for (let dataRow = headerRow; dataRow <= range.e.r; dataRow++) {
+                        const firstCell = gameDaySheet[XLSX.utils.encode_cell({ r: dataRow, c: 0 })];
+                        if (!firstCell || firstCell.v === '') break; // Stop at empty row
+                        
+                        // Border all columns in this row (Order, #, Player)
+                        for (let C = 0; C <= 2; C++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: dataRow, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                addStyle(cell, {
+                                    border: borderStyle,
+                                    alignment: { horizontal: "center" }
+                                });
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Find and border DEFENSIVE POSITIONS section (all cells)
+            for (let R = 0; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v === 'DEFENSIVE POSITIONS') {
+                    const headerRow = R + 1;
+                    const numCols = 2 + inningsPlayed; // Order, Player, + innings
+                    
+                    // Apply borders to all cells in the table
+                    for (let dataRow = headerRow; dataRow <= range.e.r; dataRow++) {
+                        const firstCell = gameDaySheet[XLSX.utils.encode_cell({ r: dataRow, c: 0 })];
+                        if (!firstCell || firstCell.v === '') break;
+                        
+                        for (let C = 0; C < numCols; C++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: dataRow, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                // Don't override the colored inning cells, just ensure they have borders
+                                if (!cell.s || !cell.s.fill) {
+                                    addStyle(cell, {
+                                        border: borderStyle,
+                                        alignment: { horizontal: "center" }
+                                    });
+                                } else {
+                                    // Just add borders to cells that already have colors
+                                    if (!cell.s.border) {
+                                        addStyle(cell, { border: borderStyle });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Find and border PITCHING TRACKER section
+            for (let R = 0; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v === 'PITCHING TRACKER') {
+                    const headerRow = R + 1;
+                    
+                    // Apply borders to all cells (Pitcher, K, BB, HBP, H)
+                    for (let dataRow = headerRow; dataRow <= range.e.r; dataRow++) {
+                        const firstCell = gameDaySheet[XLSX.utils.encode_cell({ r: dataRow, c: 0 })];
+                        if (!firstCell || firstCell.v === '') break;
+                        
+                        for (let C = 0; C <= 4; C++) { // 5 columns
+                            const cellRef = XLSX.utils.encode_cell({ r: dataRow, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                addStyle(cell, {
+                                    border: borderStyle,
+                                    alignment: { horizontal: "center" }
+                                });
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Find and border BATTING TRACKER section
+            for (let R = 0; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v && cellA.v.toString().startsWith('BATTING TRACKER')) {
+                    const headerRow = R + 1;
+                    
+                    // Apply borders to all cells (Player, AB1, AB2, AB3, AB4)
+                    for (let dataRow = headerRow; dataRow <= range.e.r; dataRow++) {
+                        const firstCell = gameDaySheet[XLSX.utils.encode_cell({ r: dataRow, c: 0 })];
+                        if (!firstCell || firstCell.v === '') break;
+                        
+                        for (let C = 0; C <= 4; C++) { // 5 columns (Player + 4 ABs)
+                            const cellRef = XLSX.utils.encode_cell({ r: dataRow, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                // Don't override AB column colors, just ensure borders
+                                if (!cell.s || !cell.s.fill) {
+                                    addStyle(cell, {
+                                        border: borderStyle,
+                                        alignment: { horizontal: "center" }
+                                    });
+                                } else {
+                                    if (!cell.s.border) {
+                                        addStyle(cell, { border: borderStyle });
+                                    }
+                                }
                             }
                         }
                     }
