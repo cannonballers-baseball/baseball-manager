@@ -7326,6 +7326,10 @@
                 right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
             };
             
+            // Banded row colors
+            const lightBand = 'FFFFFFFF'; // White
+            const darkBand = 'FFF0F0F0';  // Light gray
+            
             let currentRow = 1;
             
             // TITLE
@@ -7362,28 +7366,34 @@
             });
             currentRow++;
             
+            let rowIndex = 0;
             currentGame.battingOrder.forEach((playerId, idx) => {
                 if (playerId) {
                     const player = roster.find(p => p.id === playerId);
                     const jerseyNum = player && player.number ? player.number : '';
                     worksheet.getRow(currentRow).values = [idx + 1, jerseyNum, player ? player.name : 'Unknown'];
+                    
+                    // Banded rows
+                    const bandColor = (rowIndex % 2 === 0) ? lightBand : darkBand;
                     worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
                         cell.border = tableBorder;
                         cell.alignment = { horizontal: 'center' };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandColor } };
                     });
                     currentRow++;
+                    rowIndex++;
                 }
             });
             currentRow++;
             
-            // SECTION 2: DEFENSIVE POSITIONS
+            // SECTION 2: DEFENSIVE POSITIONS (NO ORDER COLUMN)
             worksheet.getCell(`A${currentRow}`).value = 'DEFENSIVE POSITIONS';
             worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
             worksheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
             currentRow++;
             
             const defenseHeaderRow = currentRow;
-            const defenseHeaders = ['Order', 'Player'];
+            const defenseHeaders = ['Player']; // Removed "Order"
             for (let i = 1; i <= inningsPlayed; i++) {
                 defenseHeaders.push(`Inn ${i}`);
             }
@@ -7392,22 +7402,16 @@
                 cell.font = { bold: true };
                 cell.border = tableBorder;
                 cell.alignment = { horizontal: 'center' };
-                
-                // Alternating colors for inning columns
-                if (colNumber > 2) {
-                    const inningNum = colNumber - 2;
-                    const color = (inningNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-                } else {
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
-                }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
             });
             currentRow++;
             
+            rowIndex = 0;
             currentGame.battingOrder.forEach((playerId, idx) => {
                 if (playerId) {
                     const player = roster.find(p => p.id === playerId);
-                    const rowData = [idx + 1, player ? player.name : 'Unknown'];
+                    const firstName = player ? player.name.split(' ')[0] : 'Unknown'; // First name only
+                    const rowData = [firstName]; // No order column
                     
                     // Find positions for each inning
                     for (let inningIdx = 0; inningIdx < inningsPlayed; inningIdx++) {
@@ -7429,19 +7433,16 @@
                         rowData.push(position);
                     }
                     
+                    // Banded rows
+                    const bandColor = (rowIndex % 2 === 0) ? lightBand : darkBand;
                     worksheet.getRow(currentRow).values = rowData;
                     worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
                         cell.border = tableBorder;
                         cell.alignment = { horizontal: 'center' };
-                        
-                        // Alternating colors for inning columns
-                        if (colNumber > 2) {
-                            const inningNum = colNumber - 2;
-                            const color = (inningNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-                        }
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandColor } };
                     });
                     currentRow++;
+                    rowIndex++;
                 }
             });
             currentRow++;
@@ -7468,23 +7469,30 @@
                 if (pitcherId) pitchersSet.add(pitcherId);
             }
             
+            rowIndex = 0;
             pitchersSet.forEach(pitcherId => {
                 const player = roster.find(p => p.id === pitcherId);
                 if (player) {
-                    worksheet.getRow(currentRow).values = [player.name, '', '', '', ''];
+                    const firstName = player.name.split(' ')[0]; // First name only
+                    const bandColor = (rowIndex % 2 === 0) ? lightBand : darkBand;
+                    worksheet.getRow(currentRow).values = [firstName, '', '', '', ''];
                     worksheet.getRow(currentRow).eachCell(cell => {
                         cell.border = tableBorder;
                         cell.alignment = { horizontal: 'center' };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandColor } };
                     });
                     currentRow++;
+                    rowIndex++;
                 }
             });
             
             // Substitute row
+            const bandColor = (rowIndex % 2 === 0) ? lightBand : darkBand;
             worksheet.getRow(currentRow).values = ['(substitute)', '', '', '', ''];
             worksheet.getRow(currentRow).eachCell(cell => {
                 cell.border = tableBorder;
                 cell.alignment = { horizontal: 'center' };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandColor } };
             });
             currentRow += 2;
             
@@ -7499,43 +7507,33 @@
             worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
                 cell.border = tableBorder;
                 cell.alignment = { horizontal: 'center' };
-                
-                // Alternating colors for AB columns
-                if (colNumber > 1) {
-                    const abNum = colNumber - 1;
-                    const color = (abNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-                } else {
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
-                }
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
             });
             currentRow++;
             
+            rowIndex = 0;
             currentGame.battingOrder.forEach((playerId, idx) => {
                 if (playerId) {
                     const player = roster.find(p => p.id === playerId);
                     if (player) {
-                        worksheet.getRow(currentRow).values = [player.name, '', '', '', ''];
+                        const firstName = player.name.split(' ')[0]; // First name only
+                        const bandColor = (rowIndex % 2 === 0) ? lightBand : darkBand;
+                        worksheet.getRow(currentRow).values = [firstName, '', '', '', ''];
                         worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
                             cell.border = tableBorder;
                             cell.alignment = { horizontal: 'center' };
-                            
-                            // Alternating colors for AB columns
-                            if (colNumber > 1) {
-                                const abNum = colNumber - 1;
-                                const color = (abNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-                            }
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bandColor } };
                         });
                         currentRow++;
+                        rowIndex++;
                     }
                 }
             });
             
             // Set column widths
-            worksheet.getColumn(1).width = 20; // Player/Order
-            worksheet.getColumn(2).width = 10; // Jersey/K
-            worksheet.getColumn(3).width = 20; // Player/BB
+            worksheet.getColumn(1).width = 20; // Player
+            worksheet.getColumn(2).width = 10; 
+            worksheet.getColumn(3).width = 10; 
             for (let i = 4; i <= 8; i++) {
                 worksheet.getColumn(i).width = 10;
             }
