@@ -1424,7 +1424,7 @@
             pitcherChanges: [],
             batting: {}, // {playerId: {hits, atBats, walks, coachPitch, coachPitchResult}}
             unavailablePlayers: [],
-            status: 'not-started'
+            status: 'scheduled'
         };
         
         // Track current inning for visual display
@@ -1695,7 +1695,7 @@
                 pitcherChanges: [],
                 batting: {},
                 unavailablePlayers: [],
-                status: 'in-progress',
+                status: 'scheduled',
                 createdAt: new Date().toISOString()
             };
             
@@ -2332,7 +2332,7 @@
                     pitcherChanges: [],
                     batting: {},
                     unavailablePlayers: [],
-                    status: 'not-started'
+                    status: 'scheduled'
                 };
                 seasonData.currentGameId = null;
             }
@@ -2792,6 +2792,199 @@
             alert(`✏️ Game reopened for editing (${game.inningsPlayed || 6} innings). Make your changes and click "FINISH GAME" when done.\n\n✓ Old stats will be removed and replaced with new stats when you finish the game again.`);
         }
         
+        function editGameDetails(gameId) {
+            const game = seasonData.games.find(g => g.id === gameId);
+            if (!game) {
+                alert('Game not found');
+                return;
+            }
+            
+            // Get current values
+            const currentDate = game.date;
+            const currentOpponent = game.opponent || '';
+            const currentLocation = game.location || '';
+            const currentStatus = game.status || 'scheduled';
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.85);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: var(--bg-card); max-width: 500px; width: 100%; border-radius: 16px; border: 2px solid var(--diamond-green);">
+                    <div style="padding: 24px; border-bottom: 2px solid var(--border-color);">
+                        <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: 2px; margin-bottom: 8px; color: var(--diamond-green);">
+                            📝 EDIT GAME DETAILS
+                        </h2>
+                        <div style="color: var(--text-secondary);">
+                            Update date, opponent, location, or status
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 24px;">
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
+                                Game Date:
+                            </label>
+                            <input type="date" id="editGameDate" value="${currentDate}" 
+                                   style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
+                                Opponent:
+                            </label>
+                            <select id="editGameOpponent" 
+                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                <option value="">Select Team</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
+                                Location:
+                            </label>
+                            <select id="editGameLocation"
+                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                <option value="Phoenix Park">Phoenix Park</option>
+                                <option value="Lovitt">Lovitt</option>
+                                <option value="Coleman/CMP">Coleman/CMP</option>
+                                <option value="Carnegie">Carnegie</option>
+                                <option value="Away">Away Field</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">
+                                Game Status:
+                            </label>
+                            <select id="editGameStatus"
+                                    style="width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);">
+                                <option value="scheduled">📅 Scheduled - Ready to play</option>
+                                <option value="postponed">⏸️ Postponed - Rain-out or delayed</option>
+                                <option value="cancelled">❌ Cancelled - Game won't be played</option>
+                            </select>
+                            <div style="margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                                💡 Use "Postponed" for rain-outs, then change back to "Scheduled" when you have a new date
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 12px; margin-top: 24px;">
+                            <button class="btn" onclick="saveGameDetails('${gameId}')" style="flex: 1; padding: 16px; font-size: 1.1rem;">
+                                ✓ Save Changes
+                            </button>
+                            <button class="btn btn-secondary" onclick="this.closest('[style*=fixed]').remove()" style="padding: 16px;">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Populate opponent dropdown with current opponents
+            const opponentSelect = document.getElementById('editGameOpponent');
+            const opponents = getOpponents();
+            opponents.forEach(opp => {
+                const option = document.createElement('option');
+                option.value = opp;
+                option.textContent = opp;
+                if (opp === currentOpponent) option.selected = true;
+                opponentSelect.appendChild(option);
+            });
+            
+            // Set current location
+            const locationSelect = document.getElementById('editGameLocation');
+            locationSelect.value = currentLocation;
+            
+            // Set current status (handle old games that might have 'not-started' or 'in-progress')
+            const statusSelect = document.getElementById('editGameStatus');
+            if (currentStatus === 'not-started' || currentStatus === 'in-progress') {
+                statusSelect.value = 'scheduled';
+            } else {
+                statusSelect.value = currentStatus;
+            }
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+        }
+        
+        function saveGameDetails(gameId) {
+            const game = seasonData.games.find(g => g.id === gameId);
+            if (!game) {
+                alert('Game not found');
+                return;
+            }
+            
+            // Get new values
+            const newDate = document.getElementById('editGameDate').value;
+            const newOpponent = document.getElementById('editGameOpponent').value;
+            const newLocation = document.getElementById('editGameLocation').value;
+            const newStatus = document.getElementById('editGameStatus').value;
+            
+            // Validate date
+            if (!newDate) {
+                alert('Please select a game date');
+                return;
+            }
+            
+            // Validate opponent
+            if (!newOpponent) {
+                alert('Please select an opponent');
+                return;
+            }
+            
+            // Update game details
+            const oldDate = game.date;
+            game.date = newDate;
+            game.opponent = newOpponent;
+            game.location = newLocation;
+            game.status = newStatus;
+            
+            saveData();
+            
+            // Close modal
+            document.querySelector('[style*="position: fixed"]')?.remove();
+            
+            // Refresh displays
+            renderGameManager();
+            if (currentGame.id === gameId) {
+                currentGame.date = newDate;
+                currentGame.opponent = newOpponent;
+                currentGame.location = newLocation;
+                currentGame.status = newStatus;
+                renderLineupBuilder();
+            }
+            
+            // Show confirmation
+            const statusText = newStatus === 'postponed' ? 'POSTPONED' : 
+                              newStatus === 'cancelled' ? 'CANCELLED' : 'SCHEDULED';
+            const dateChanged = oldDate !== newDate;
+            
+            let message = `✅ Game details updated!\n\n`;
+            message += `Status: ${statusText}\n`;
+            if (dateChanged) {
+                message += `Date: ${formatGameDate(oldDate)} → ${formatGameDate(newDate)}\n`;
+            }
+            message += `Opponent: ${newOpponent}\n`;
+            message += `Location: ${newLocation}`;
+            
+            alert(message);
+        }
+        
         function deleteGame(gameId) {
             try {
                 console.log('Attempting to delete game:', gameId);
@@ -2970,7 +3163,7 @@
                         pitcherChanges: [],
                         batting: {},
                         unavailablePlayers: [],
-                        status: 'not-started'
+                        status: 'scheduled'
                     };
                     seasonData.currentGameId = null;
                 }
@@ -3005,6 +3198,8 @@
             }
         }
         window.deleteGame = deleteGame; // Explicitly global
+        window.editGameDetails = editGameDetails; // Explicitly global
+        window.saveGameDetails = saveGameDetails; // Explicitly global
         
         function renderGameManager() {
             // Set today's date as default
@@ -3041,6 +3236,23 @@
                         });
                         const isActive = currentGame.id === game.id;
                         
+                        // Determine game status (handle old games with 'not-started')
+                        const status = game.status === 'not-started' ? 'scheduled' : (game.status || 'scheduled');
+                        
+                        // Status badge
+                        let statusBadge = '';
+                        let statusColor = '';
+                        if (status === 'postponed') {
+                            statusBadge = '⏸️ POSTPONED';
+                            statusColor = '#f59e0b'; // Orange
+                        } else if (status === 'cancelled') {
+                            statusBadge = '❌ CANCELLED';
+                            statusColor = 'var(--alert-red)';
+                        } else if (status === 'in-progress') {
+                            statusBadge = '⏳ IN PROGRESS';
+                            statusColor = 'var(--safe-blue)';
+                        }
+                        
                         return `
                             <div class="game-card" style="${isActive ? 'border: 2px solid var(--diamond-green);' : ''}">
                                 <div class="game-details">
@@ -3049,9 +3261,13 @@
                                     </div>
                                     <div class="game-meta">
                                         ${gameDate} • ${game.location || 'TBD'}
+                                        ${statusBadge ? `<span style="margin-left: 8px; padding: 4px 8px; background: ${statusColor}; border-radius: 4px; font-size: 0.75rem; font-weight: 700; color: white;">${statusBadge}</span>` : ''}
                                     </div>
                                 </div>
                                 <div class="game-actions">
+                                    <button class="btn btn-small" onclick="editGameDetails('${game.id}')">
+                                        📝 Edit Details
+                                    </button>
                                     <button class="btn btn-small" onclick="switchToGame('${game.id}'); showSection('lineup');">
                                         Edit Lineup
                                     </button>
@@ -3823,7 +4039,7 @@
                     pitcherChanges: [],
                     batting: {},
                     unavailablePlayers: [],
-                    status: 'not-started'
+                    status: 'scheduled'
                 };
                 seasonData.currentGameId = null;
                 saveData();
@@ -7715,7 +7931,7 @@
                             batting: {},
                             unavailablePlayers: [],
                             inningsPlayed: 6,
-                            status: 'not-started'
+                            status: 'scheduled'
                         };
                         
                         seasonData.games.push(newGame);
@@ -7821,7 +8037,7 @@
                             batting: {},
                             unavailablePlayers: [],
                             inningsPlayed: 6,
-                            status: 'not-started'
+                            status: 'scheduled'
                         };
                         
                         seasonData.games.push(newGame);
