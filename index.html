@@ -934,6 +934,9 @@
     
     <!-- SheetJS for Excel export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- ExcelJS for styled exports -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -7297,6 +7300,258 @@
         }
         
         function exportLineupAsExcel() {
+            // Use ExcelJS for proper table formatting with borders
+            exportGameDaySheetExcelJS();
+        }
+        
+        async function exportGameDaySheetExcelJS() {
+            const ExcelJS = window.ExcelJS;
+            if (!ExcelJS) {
+                alert('ExcelJS library not loaded. Please refresh the page.');
+                return;
+            }
+            
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Game Day Sheet');
+            
+            const inningsPlayed = currentGame.inningsPlayed || 6;
+            const gameDate = formatGameDate(currentGame.date);
+            const opponent = currentGame.opponent || 'TBD';
+            
+            // Border style for tables
+            const tableBorder = {
+                top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+            };
+            
+            let currentRow = 1;
+            
+            // TITLE
+            worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+            const titleCell = worksheet.getCell(`A${currentRow}`);
+            titleCell.value = 'CANNON BALLERS - GAME DAY SHEET';
+            titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A5F3F' } };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            currentRow++;
+            
+            // SUBTITLE
+            worksheet.mergeCells(`A${currentRow}:H${currentRow}`);
+            const subtitleCell = worksheet.getCell(`A${currentRow}`);
+            subtitleCell.value = `${gameDate} vs ${opponent}`;
+            subtitleCell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+            subtitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A5F3F' } };
+            subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            currentRow += 2;
+            
+            // SECTION 1: BATTING ORDER
+            worksheet.getCell(`A${currentRow}`).value = 'BATTING ORDER';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+            currentRow++;
+            
+            const battingOrderStart = currentRow;
+            worksheet.getRow(currentRow).values = ['Order', '#', 'Player'];
+            worksheet.getRow(currentRow).font = { bold: true };
+            worksheet.getRow(currentRow).eachCell(cell => {
+                cell.border = tableBorder;
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+                cell.alignment = { horizontal: 'center' };
+            });
+            currentRow++;
+            
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const jerseyNum = player && player.number ? player.number : '';
+                    worksheet.getRow(currentRow).values = [idx + 1, jerseyNum, player ? player.name : 'Unknown'];
+                    worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
+                        cell.border = tableBorder;
+                        cell.alignment = { horizontal: 'center' };
+                    });
+                    currentRow++;
+                }
+            });
+            currentRow++;
+            
+            // SECTION 2: DEFENSIVE POSITIONS
+            worksheet.getCell(`A${currentRow}`).value = 'DEFENSIVE POSITIONS';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+            currentRow++;
+            
+            const defenseHeaderRow = currentRow;
+            const defenseHeaders = ['Order', 'Player'];
+            for (let i = 1; i <= inningsPlayed; i++) {
+                defenseHeaders.push(`Inn ${i}`);
+            }
+            worksheet.getRow(currentRow).values = defenseHeaders;
+            worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
+                cell.font = { bold: true };
+                cell.border = tableBorder;
+                cell.alignment = { horizontal: 'center' };
+                
+                // Alternating colors for inning columns
+                if (colNumber > 2) {
+                    const inningNum = colNumber - 2;
+                    const color = (inningNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+                } else {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+                }
+            });
+            currentRow++;
+            
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    const rowData = [idx + 1, player ? player.name : 'Unknown'];
+                    
+                    // Find positions for each inning
+                    for (let inningIdx = 0; inningIdx < inningsPlayed; inningIdx++) {
+                        let position = '';
+                        for (const pos of positions) {
+                            if (currentGame.lineup[`${inningIdx}-${pos}`] === playerId) {
+                                position = pos;
+                                break;
+                            }
+                        }
+                        if (!position) {
+                            for (let benchNum = 1; benchNum <= 3; benchNum++) {
+                                if (currentGame.lineup[`${inningIdx}-Bench${benchNum}`] === playerId) {
+                                    position = 'BENCH';
+                                    break;
+                                }
+                            }
+                        }
+                        rowData.push(position);
+                    }
+                    
+                    worksheet.getRow(currentRow).values = rowData;
+                    worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
+                        cell.border = tableBorder;
+                        cell.alignment = { horizontal: 'center' };
+                        
+                        // Alternating colors for inning columns
+                        if (colNumber > 2) {
+                            const inningNum = colNumber - 2;
+                            const color = (inningNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+                        }
+                    });
+                    currentRow++;
+                }
+            });
+            currentRow++;
+            
+            // SECTION 3: PITCHING TRACKER
+            worksheet.getCell(`A${currentRow}`).value = 'PITCHING TRACKER';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+            currentRow++;
+            
+            worksheet.getRow(currentRow).values = ['Pitcher', 'K', 'BB', 'HBP', 'H'];
+            worksheet.getRow(currentRow).font = { bold: true };
+            worksheet.getRow(currentRow).eachCell(cell => {
+                cell.border = tableBorder;
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+                cell.alignment = { horizontal: 'center' };
+            });
+            currentRow++;
+            
+            // Find pitchers
+            const pitchersSet = new Set();
+            for (let inningIdx = 0; inningIdx < inningsPlayed; inningIdx++) {
+                const pitcherId = currentGame.lineup[`${inningIdx}-P`];
+                if (pitcherId) pitchersSet.add(pitcherId);
+            }
+            
+            pitchersSet.forEach(pitcherId => {
+                const player = roster.find(p => p.id === pitcherId);
+                if (player) {
+                    worksheet.getRow(currentRow).values = [player.name, '', '', '', ''];
+                    worksheet.getRow(currentRow).eachCell(cell => {
+                        cell.border = tableBorder;
+                        cell.alignment = { horizontal: 'center' };
+                    });
+                    currentRow++;
+                }
+            });
+            
+            // Substitute row
+            worksheet.getRow(currentRow).values = ['(substitute)', '', '', '', ''];
+            worksheet.getRow(currentRow).eachCell(cell => {
+                cell.border = tableBorder;
+                cell.alignment = { horizontal: 'center' };
+            });
+            currentRow += 2;
+            
+            // SECTION 4: BATTING TRACKER
+            worksheet.getCell(`A${currentRow}`).value = 'BATTING TRACKER - Use codes: H=Hit, K=Strikeout, BB=Walk, HBP=Hit by Pitch';
+            worksheet.getCell(`A${currentRow}`).font = { bold: true, size: 12 };
+            worksheet.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A90E2' } };
+            currentRow++;
+            
+            worksheet.getRow(currentRow).values = ['Player', 'AB1', 'AB2', 'AB3', 'AB4'];
+            worksheet.getRow(currentRow).font = { bold: true };
+            worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
+                cell.border = tableBorder;
+                cell.alignment = { horizontal: 'center' };
+                
+                // Alternating colors for AB columns
+                if (colNumber > 1) {
+                    const abNum = colNumber - 1;
+                    const color = (abNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+                } else {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E8E8' } };
+                }
+            });
+            currentRow++;
+            
+            currentGame.battingOrder.forEach((playerId, idx) => {
+                if (playerId) {
+                    const player = roster.find(p => p.id === playerId);
+                    if (player) {
+                        worksheet.getRow(currentRow).values = [player.name, '', '', '', ''];
+                        worksheet.getRow(currentRow).eachCell((cell, colNumber) => {
+                            cell.border = tableBorder;
+                            cell.alignment = { horizontal: 'center' };
+                            
+                            // Alternating colors for AB columns
+                            if (colNumber > 1) {
+                                const abNum = colNumber - 1;
+                                const color = (abNum % 2 === 0) ? 'FFFFE5CC' : 'FFCCE5FF';
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+                            }
+                        });
+                        currentRow++;
+                    }
+                }
+            });
+            
+            // Set column widths
+            worksheet.getColumn(1).width = 20; // Player/Order
+            worksheet.getColumn(2).width = 10; // Jersey/K
+            worksheet.getColumn(3).width = 20; // Player/BB
+            for (let i = 4; i <= 8; i++) {
+                worksheet.getColumn(i).width = 10;
+            }
+            
+            // Generate file
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lineup_${opponent.replace(/\s+/g, '_')}_${currentGame.date}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function exportLineupAsExcelOLD() {
             const inningsPlayed = currentGame.inningsPlayed || 6;
             const inningsToShow = innings.slice(0, inningsPlayed);
             const gameDate = formatGameDate(currentGame.date);
