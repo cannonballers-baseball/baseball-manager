@@ -7305,6 +7305,129 @@
             });
             
             const gameDaySheet = XLSX.utils.aoa_to_sheet(gameDayData);
+            
+            // Add styling for better readability
+            const range = XLSX.utils.decode_range(gameDaySheet['!ref']);
+            
+            // Style helper function
+            const addStyle = (cell, style) => {
+                if (!cell) return;
+                if (!cell.s) cell.s = {};
+                Object.assign(cell.s, style);
+            };
+            
+            // Track row numbers for each section
+            let currentRow = 0;
+            
+            // TITLE ROWS (0-2)
+            for (let R = 0; R <= 2; R++) {
+                for (let C = 0; C <= range.e.c; C++) {
+                    const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = gameDaySheet[cellRef];
+                    if (cell) {
+                        addStyle(cell, {
+                            font: { bold: true, sz: 14 },
+                            fill: { fgColor: { rgb: "1A5F3F" } }, // Dark green
+                            alignment: { horizontal: "center", vertical: "center" }
+                        });
+                    }
+                }
+            }
+            
+            // Find section headers and style them
+            for (let R = 3; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v) {
+                    const val = cellA.v.toString();
+                    
+                    // Section headers (BATTING ORDER, DEFENSIVE POSITIONS, etc.)
+                    if (val === 'BATTING ORDER' || val === 'DEFENSIVE POSITIONS' || 
+                        val === 'PITCHING TRACKER' || val.startsWith('BATTING TRACKER')) {
+                        for (let C = 0; C <= range.e.c; C++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                addStyle(cell, {
+                                    font: { bold: true, sz: 12 },
+                                    fill: { fgColor: { rgb: "4A90E2" } }, // Blue
+                                    alignment: { horizontal: "center" }
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Column headers (Order, Player, Inn 1, Inn 2, etc.)
+                    if (val === 'Order' || val === 'Pitcher') {
+                        for (let C = 0; C <= range.e.c; C++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                const headerText = cell.v ? cell.v.toString() : '';
+                                
+                                // Alternating inning colors
+                                let bgColor = "E8E8E8"; // Default gray
+                                if (headerText.startsWith('Inn ')) {
+                                    const inningNum = parseInt(headerText.replace('Inn ', ''));
+                                    bgColor = (inningNum % 2 === 0) ? "FFE5CC" : "CCE5FF"; // Orange vs Blue
+                                } else if (headerText.startsWith('AB')) {
+                                    const abNum = parseInt(headerText.replace('AB', ''));
+                                    bgColor = (abNum % 2 === 0) ? "FFE5CC" : "CCE5FF";
+                                }
+                                
+                                addStyle(cell, {
+                                    font: { bold: true },
+                                    fill: { fgColor: { rgb: bgColor } },
+                                    alignment: { horizontal: "center" },
+                                    border: {
+                                        top: { style: "thin", color: { rgb: "000000" } },
+                                        bottom: { style: "thin", color: { rgb: "000000" } },
+                                        left: { style: "thin", color: { rgb: "000000" } },
+                                        right: { style: "thin", color: { rgb: "000000" } }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Apply alternating inning column colors to DEFENSIVE POSITIONS grid
+            // Find the DEFENSIVE POSITIONS section
+            for (let R = 0; R <= range.e.r; R++) {
+                const cellA = gameDaySheet[XLSX.utils.encode_cell({ r: R, c: 0 })];
+                if (cellA && cellA.v === 'DEFENSIVE POSITIONS') {
+                    // Next row is headers (Order, Player, Inn 1, Inn 2...)
+                    const headerRow = R + 1;
+                    
+                    // Apply alternating colors to inning columns (starting from column 2)
+                    for (let dataRow = headerRow + 1; dataRow <= range.e.r; dataRow++) {
+                        const firstCell = gameDaySheet[XLSX.utils.encode_cell({ r: dataRow, c: 0 })];
+                        // Stop when we hit an empty row or new section
+                        if (!firstCell || !firstCell.v || firstCell.v === '') break;
+                        
+                        for (let C = 2; C < 2 + inningsPlayed; C++) {
+                            const cellRef = XLSX.utils.encode_cell({ r: dataRow, c: C });
+                            const cell = gameDaySheet[cellRef];
+                            if (cell) {
+                                const inningNum = C - 1; // Column 2 = Inning 1, Column 3 = Inning 2, etc.
+                                const bgColor = (inningNum % 2 === 0) ? "FFE5CC" : "CCE5FF";
+                                addStyle(cell, {
+                                    fill: { fgColor: { rgb: bgColor } },
+                                    alignment: { horizontal: "center" },
+                                    border: {
+                                        top: { style: "thin", color: { rgb: "CCCCCC" } },
+                                        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+                                        left: { style: "thin", color: { rgb: "CCCCCC" } },
+                                        right: { style: "thin", color: { rgb: "CCCCCC" } }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
             gameDaySheet['!cols'] = [
                 { wch: 8 },   // Order
                 { wch: 20 },  // Player/Name
